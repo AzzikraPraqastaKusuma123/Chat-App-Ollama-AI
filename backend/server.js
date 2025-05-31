@@ -1,24 +1,76 @@
-// ... (bagian atas server.js tetap sama)
-require('dotenv').config();
+// backend/server.js
+
+// 1. Impor modul yang paling awal dibutuhkan, seperti dotenv
+require('dotenv').config(); // Panggil ini di paling atas jika Anda menggunakan .env
+
+// 2. Impor modul-modul lain
+const express = require('express');
+const cors = require('cors');
+const ollamaImport = require('ollama');
+
+// 3. Inisialisasi aplikasi Express SETELAH mengimpor express
+const app = express();
+const port = process.env.PORT || 3001;
+
+// 4. Terapkan Middleware (menggunakan 'app')
+app.use(cors());
+app.use(express.json());
+
+// 5. Ambil API key dari environment variable
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-// --- Ollama Chat Endpoint ---
+
+// 6. Inisialisasi instance Ollama
+const ollama = ollamaImport.default;
+
+// 7. Cek startup Ollama
+if (!ollama || typeof ollama.chat !== 'function') {
+    console.error("KESALAHAN KRITIS SAAT STARTUP: Pustaka Ollama tidak termuat dengan benar atau ollama.chat bukan fungsi.");
+    console.error("Pastikan pustaka 'ollama' terinstal dengan benar.");
+    if (ollamaImport && ollamaImport.default) {
+        console.error("Tipe dari ollamaImport.default.chat:", typeof ollamaImport.default.chat);
+    } else if (ollamaImport) {
+        console.error("ollamaImport.default tidak ada. Properti yang tersedia:", Object.keys(ollamaImport));
+    }
+    // process.exit(1); // Pertimbangkan untuk menghentikan server jika Ollama adalah komponen kritis utama
+} else {
+    console.log("Pustaka Ollama (instance default, dengan metode .chat) terdeteksi dan siap digunakan saat startup.");
+}
+
+// Fungsi untuk membuat promise yang akan reject setelah timeout
+function createTimeoutPromise(ms, errorMessage = 'Operasi melebihi batas waktu') {
+    return new Promise((_, reject) => {
+        setTimeout(() => {
+            reject(new Error(errorMessage));
+        }, ms);
+    });
+}
+
+// 8. Definisikan Rute Anda
+// --- Ollama Chat Endpoint dengan Fallback ke DeepSeek ---
 app.post('/api/chat', async (req, res) => {
     const { messages, model = "gemma:2b" } = req.body; // Model Ollama default
     const OLLAMA_TIMEOUT = 60000; // 60 detik
-    // VVV PENTING: Simpan API Key Anda dengan aman, jangan di-hardcode jika memungkinkan VVV
-    // Idealnya gunakan environment variable: const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-    // Untuk contoh ini, kita akan gunakan placeholder. Ganti dengan API Key Anda.
-    const DEEPSEEK_API_KEY = "sk-69b5388e856a441492c51fccc79ec908"; 
-    // ^^^ GANTI DENGAN API KEY DEEPSEEK ANDA ^^^
 
-    // Validasi input dasar ... (tetap sama)
-    if (!messages || !Array.isArray(messages) || messages.length === 0) { /* ... */ return res.status(400).json({ error: "..." }); }
-    for (const message of messages) { if (!message.role || !message.content) { /* ... */ return res.status(400).json({ error: "..." }); } }
+    // Validasi input dasar
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: "Messages array is required and cannot be empty." });
+    }
+    for (const message of messages) {
+        if (!message.role || !message.content) {
+            return res.status(400).json({ error: "Each message must have a 'role' and 'content'." });
+        }
+    }
 
     let replyContent = "";
     let respondedBy = "";
 
     try {
+        // Validasi Pustaka Ollama sebelum digunakan di endpoint
+        if (!ollama || typeof ollama.chat !== 'function') {
+            console.error("Kesalahan Kritis di Endpoint /api/chat: ollama.chat bukan fungsi.");
+            throw new Error("Konfigurasi server bermasalah: Pustaka Ollama tidak termuat dengan benar.");
+        }
+
         console.log(`Mencoba model Ollama: ${model} dengan batas waktu ${OLLAMA_TIMEOUT / 1000} detik...`);
         
         const ollamaOperation = ollama.chat({
@@ -42,63 +94,61 @@ app.post('/api/chat', async (req, res) => {
 
     } catch (ollamaError) {
         console.warn(`Gagal mendapatkan respons dari Ollama (${model}): ${ollamaError.message}`);
-        console.log("Mencoba fallback ke DeepSeek API...");
-
-        if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === "API_KEY_DEEPSEEK_ANDA_DI_SINI") {
-            console.error("API Key DeepSeek belum diatur!");
-            return res.status(500).json({ error: `Gagal mendapatkan respons dari semua sumber. Ollama error: ${ollamaError.message}. DeepSeek API Key tidak valid.` });
-        }
         
-        try {
-            // Format pesan untuk DeepSeek API (mungkin perlu disesuaikan)
-            // Biasanya API chat mengharapkan array objek dengan 'role' dan 'content'
-            const deepseekPayloadMessages = messages.map(msg => ({ role: msg.role, content: msg.content }));
+        if (DEEPSEEK_API_KEY) {
+            console.log("Mencoba fallback ke DeepSeek API...");
+            try {
+                const deepseekPayloadMessages = messages.map(msg => ({ role: msg.role, content: msg.content }));
+                // PASTIKAN URL DAN NAMA MODEL DEEPSEEK INI BENAR SESUAI DOKUMENTASI MEREKA
+                const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"; 
+                const DEEPSEEK_MODEL_NAME = "deepseek-chat"; // atau "deepseek-coder"
 
-            // URL Endpoint DeepSeek API (GANTI DENGAN URL YANG BENAR DARI DOKUMENTASI DEEPSEEK)
-            const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"; // INI HANYA CONTOH, PASTIKAN URL INI BENAR
+                console.log(`Mengirim permintaan ke DeepSeek API (Model: ${DEEPSEEK_MODEL_NAME})...`);
+                const deepseekAPIResponse = await fetch(DEEPSEEK_API_URL, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: DEEPSEEK_MODEL_NAME,
+                        messages: deepseekPayloadMessages,
+                        // stream: false, // Tambahkan parameter lain jika perlu
+                    })
+                });
 
-            console.log("Mengirim permintaan ke DeepSeek API...");
-            const deepseekAPIResponse = await fetch(DEEPSEEK_API_URL, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    // Nama model spesifik di DeepSeek (GANTI DENGAN NAMA MODEL YANG SESUAI)
-                    model: "deepseek-chat", // atau "deepseek-coder", tergantung model yang Anda inginkan
-                    messages: deepseekPayloadMessages,
-                    // Tambahkan parameter lain jika diperlukan oleh API DeepSeek (misalnya, max_tokens, temperature, dll.)
-                    // stream: false, // Jika DeepSeek mendukung opsi stream
-                })
-            });
+                if (!deepseekAPIResponse.ok) {
+                    const errorData = await deepseekAPIResponse.json().catch(() => deepseekAPIResponse.text());
+                    console.error("DeepSeek API Error Data:", errorData);
+                    throw new Error( (typeof errorData === 'string' ? errorData : errorData?.error?.message) || `DeepSeek API error: ${deepseekAPIResponse.status}`);
+                }
+                
+                const deepseekData = await deepseekAPIResponse.json();
+                console.log("Respons mentah dari DeepSeek API:", deepseekData); // Log respons mentah
 
-            if (!deepseekAPIResponse.ok) {
-                const errorData = await deepseekAPIResponse.json().catch(() => deepseekAPIResponse.text()); // Coba parse JSON, jika gagal ambil text
-                console.error("DeepSeek API Error Data:", errorData);
-                throw new Error( (typeof errorData === 'string' ? errorData : errorData?.error?.message) || `DeepSeek API error: ${deepseekAPIResponse.status}`);
+                // SESUAIKAN CARA MENGAMBIL KONTEN BERDASARKAN STRUKTUR RESPONS DEEPSEEK
+                if (deepseekData.choices && deepseekData.choices[0] && deepseekData.choices[0].message && deepseekData.choices[0].message.content) {
+                    replyContent = deepseekData.choices[0].message.content;
+                } else {
+                    console.error("Struktur respons tidak dikenal dari DeepSeek API:", deepseekData);
+                    throw new Error("Struktur respons tidak dikenal dari DeepSeek API.");
+                }
+                respondedBy = `DeepSeek API (${DEEPSEEK_MODEL_NAME})`;
+                console.log("Respons berhasil dari DeepSeek API.");
+
+            } catch (deepseekError) {
+                console.error("Gagal mendapatkan respons dari DeepSeek API juga:", deepseekError.message);
+                // Error akan ditangani oleh blok di bawah jika replyContent tetap kosong
             }
-            
-            const deepseekData = await deepseekAPIResponse.json();
-            console.log("Respons dari DeepSeek API:", deepseekData);
+        } else {
+            console.log("DEEPSEEK_API_KEY tidak tersedia, tidak melakukan fallback.");
+        }
 
-            // Ekstrak konten balasan dari deepseekData
-            // Ini SANGAT BERGANTUNG pada struktur respons API DeepSeek. Anda HARUS memeriksa dokumentasi mereka.
-            // Contoh umum (mungkin perlu diubah):
-            if (deepseekData.choices && deepseekData.choices[0] && deepseekData.choices[0].message && deepseekData.choices[0].message.content) {
-                replyContent = deepseekData.choices[0].message.content;
-            } else {
-                // Jika struktur tidak sesuai, log dan lempar error
-                console.error("Struktur respons tidak dikenal dari DeepSeek API:", deepseekData);
-                throw new Error("Struktur respons tidak dikenal dari DeepSeek API.");
-            }
-            
-            respondedBy = "DeepSeek API";
-            console.log("Respons berhasil dari DeepSeek API.");
-
-        } catch (deepseekError) {
-            console.error("Gagal mendapatkan respons dari DeepSeek API juga:", deepseekError); // Log error lengkap
-            return res.status(500).json({ error: `Gagal mendapatkan respons dari semua sumber. Ollama error: ${ollamaError.message}. DeepSeek error: ${deepseekError.message}` });
+        // Jika replyContent masih kosong setelah mencoba semua (Ollama dan DeepSeek jika ada key),
+        // kirim error yang relevan.
+        if (!replyContent) {
+            // Menggunakan error dari Ollama sebagai error utama jika fallback tidak dicoba atau gagal
+            return res.status(500).json({ error: `Gagal mendapatkan respons. Ollama error: ${ollamaError.message}` + (DEEPSEEK_API_KEY ? ". Upaya fallback ke DeepSeek juga gagal." : ". Tidak ada fallback API Key.") });
         }
     }
 
@@ -107,22 +157,21 @@ app.post('/api/chat', async (req, res) => {
         console.log(`Mengirim balasan dari: ${respondedBy}`);
         res.json({ reply: { role: "assistant", content: replyContent, provider: respondedBy } });
     } else {
-        // Fallback jika tidak ada konten sama sekali (seharusnya sudah ditangani di atas)
-        if (!res.headersSent) { // Pastikan header belum dikirim
-           res.status(500).json({ error: "Tidak ada konten balasan yang bisa dikirim setelah mencoba semua sumber." });
+        // Ini sebagai jaring pengaman terakhir, idealnya tidak akan pernah tercapai.
+        if (!res.headersSent) { 
+           res.status(500).json({ error: "Terjadi kesalahan internal dan tidak ada balasan yang dapat dihasilkan." });
         }
     }
 });
 
-// Fungsi createTimeoutPromise tetap sama
-function createTimeoutPromise(ms, errorMessage = 'Operasi melebihi batas waktu') {
-    return new Promise((_, reject) => {
-        setTimeout(() => {
-            reject(new Error(errorMessage));
-        }, ms);
-    });
-}
+// --- Health Check Endpoint ---
+app.get('/', (req, res) => {
+    res.send('Chat backend is running and ready!');
+});
 
-// ... (sisa kode server.js: Health Check, app.listen)
-// app.get('/', (req, res) => { res.send('Chat backend is running and ready!'); });
-// app.listen(port, '0.0.0.0', () => { console.log(`Node.js chat backend listening...`); });
+// Start the server
+app.listen(port, '0.0.0.0', () => { 
+    console.log(`Node.js chat backend listening on all interfaces at port ${port}`);
+    console.log(`Ollama API endpoint available at POST /api/chat`);
+    console.log("Server started. Ready to receive requests.");
+});
