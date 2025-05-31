@@ -33,8 +33,9 @@ if (!ollama || typeof ollama.chat !== 'function') {
 
 // --- Ollama Chat Endpoint ---
 app.post('/api/chat', async (req, res) => {
-    // Menggunakan "phi:2.7b" sebagai model default
-    const { messages, model = "phi:2.7b" } = req.body;
+    // VVV MODEL DEFAULT DIUBAH DI SINI VVV
+    const { messages, model = "gemma:2b" } = req.body;
+    // ^^^ MODEL DEFAULT SEKARANG gemma:2b ^^^
 
     // Validasi input dasar
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -56,7 +57,7 @@ app.post('/api/chat', async (req, res) => {
         console.log(`Received request for model: ${model} with messages:`, messages);
 
         const response = await ollama.chat({
-            model: model,
+            model: model, // Akan menggunakan "gemma:2b" jika tidak ada model dari body request
             messages: messages,
             stream: false,
         });
