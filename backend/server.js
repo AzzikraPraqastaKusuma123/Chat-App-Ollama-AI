@@ -1,4 +1,4 @@
-// server.js
+// backend/server.js
 
 // Import necessary modules
 const express = require('express');
@@ -55,9 +55,8 @@ app.post('/api/chat', async (req, res) => {
     try {
         console.log(`Received request for model: ${model} with messages:`, messages);
 
-        // Menggunakan ollama.chat (setelah ollama = ollamaImport.default)
         const response = await ollama.chat({
-            model: model, // Akan menggunakan "phi:2.7b" jika tidak ada model dari body request
+            model: model,
             messages: messages,
             stream: false,
         });
@@ -92,8 +91,8 @@ app.get('/', (req, res) => {
 });
 
 // Start the server
-app.listen(port, () => {
-    console.log(`Node.js chat backend listening at http://localhost:${port}`);
-    console.log(`Ollama API endpoint available at POST http://localhost:${port}/api/chat`);
+app.listen(port, '0.0.0.0', () => { // Mendengarkan di semua antarmuka jaringan
+    console.log(`Node.js chat backend listening on all interfaces at port ${port}`);
+    console.log(`Ollama API endpoint available at POST /api/chat`);
     console.log("Server started. Ready to receive requests.");
 });

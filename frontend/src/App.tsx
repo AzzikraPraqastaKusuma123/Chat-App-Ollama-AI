@@ -1,6 +1,6 @@
-// src/App.tsx
+// frontend/src/App.tsx
 import React, { useState, useEffect, useRef } from "react";
-import { MessageCard } from "./components/MessageCard"; // Pastikan path ini benar
+import { MessageCard } from "./components/MessageCard"; // PASTIKAN PATH INI BENAR
 
 type Message = {
     role: "assistant" | "user";
@@ -38,22 +38,32 @@ function App() {
             try {
                 const messagesForApi = [newMessage];
 
-                const response = await fetch("http://localhost:3001/api/chat", {
+                // VVV ALAMAT IP BACKEND SUDAH DIMASUKKAN VVV
+                // Ganti IP ini jika laptop backend Anda menggunakan IP yang lain dari daftar (misal, 192.168.100.40)
+                // untuk terhubung ke jaringan yang sama dengan laptop frontend.
+                const backendUrl = "http://192.168.100.29:3001/api/chat";
+                // ^^^ PERIKSA KEMBALI IP INI ^^^
+
+                const response = await fetch(backendUrl, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
                         messages: messagesForApi,
-                        // Jika Anda ingin frontend menentukan model secara eksplisit, tambahkan baris model di sini:
-                        // model: "phi:2.7b"
-                        // Jika tidak ada, backend akan menggunakan default "phi:2.7b"
+                        // model: "phi:2.7b" // Model sudah di-default di backend
                     }),
                 });
 
                 if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+                    let errorMessage = `HTTP error! status: ${response.status}`;
+                    try {
+                        const errData = await response.json();
+                        errorMessage = errData.error || errorMessage;
+                    } catch (parseError) {
+                        console.error("Could not parse error response JSON:", parseError);
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
@@ -68,8 +78,8 @@ function App() {
                 }
 
             } catch (err: any) {
-                console.error("Failed to send message:", err);
-                const errorMessage = err.message || "Failed to get response from the assistant. Please try again.";
+                console.error("Failed to send message or connect to backend:", err);
+                const errorMessage = err.message || "Failed to get response. Check network & backend.";
                 setError(errorMessage);
                 setMessages((prevMessages) => [
                     ...prevMessages,
