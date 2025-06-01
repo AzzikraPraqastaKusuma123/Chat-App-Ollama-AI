@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MessageCard } from "./components/MessageCard";
 // Pastikan ./index.css diimpor di main.tsx atau index.tsx Anda
-
+import styles from './App.module.css'; // Impor CSS Module untuk App
 type Message = {
     role: "assistant" | "user";
     content: string;
