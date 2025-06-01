@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json());
 
 // 5. Ambil API key dari environment variable
-const HF_TOKEN = process.env.HF_TOKEN; // Mengambil Hugging Face Token dari .env
+//const HF_TOKEN = process.env.HF_TOKEN; // Mengambil Hugging Face Token dari .env
 
 // 6. Inisialisasi instance Ollama
 const ollama = ollamaImport.default;
