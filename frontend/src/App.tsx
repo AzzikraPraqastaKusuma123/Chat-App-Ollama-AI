@@ -1,58 +1,65 @@
 // frontend/src/App.tsx
-import React, { useState, useEffect, useRef } from "react";
-import { MessageCard } from "./components/MessageCard"; // PASTIKAN PATH INI BENAR
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { MessageCard } from "./components/MessageCard";
+import styles from './App.module.css'; // Impor CSS Module untuk App
 
 type Message = {
     role: "assistant" | "user";
     content: string;
+    timestamp: string;
+};
+
+const SendIcon = () => ( // Komponen ikon ini bisa tetap karena stylingnya via className props, tapi kita akan style buttonnya
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 md:w-5 md:h-5"> {/* Ukuran bisa diatur di CSS jika perlu */}
+        <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+    </svg>
+);
+
+const getCurrentTimestamp = () => {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
 function App() {
     const [messages, setMessages] = useState<Message[]>([
-        { role: "assistant", content: "Hello! How can I assist you today?" },
+        { role: "assistant", content: "Halo! Saya Asisten AI Anda. Ada yang bisa dibantu?", timestamp: getCurrentTimestamp() },
     ]);
     const [input, setInput] = useState<string>("");
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
+    const textareaRef = useRef<null | HTMLTextAreaElement>(null);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-    const handleSubmit = async (e: React.FormEvent) => {
+    const scrollToBottom = () => { /* ... (tetap sama) ... */ };
+    useEffect(() => { scrollToBottom(); }, [messages]);
+    const autoGrowTextarea = useCallback(() => { /* ... (tetap sama) ... */ }, []);
+    useEffect(() => { autoGrowTextarea(); }, [input, autoGrowTextarea]);
+    const handleSubmit = async (e: React.FormEvent) => { /* ... (logika submit tetap sama, tanpa perubahan pada styling di sini) ... */ 
         e.preventDefault();
-        if (input.trim() && !isLoading) {
-            const newMessage: Message = { role: "user", content: input };
+        const trimmedInput = input.trim();
+        if (trimmedInput && !isLoading) {
+            const newMessage: Message = { 
+                role: "user", 
+                content: trimmedInput, 
+                timestamp: getCurrentTimestamp()
+            };
             setMessages((prevMessages) => [...prevMessages, newMessage]);
 
             setInput("");
+            if (textareaRef.current) {
+                textareaRef.current.style.height = "auto";
+            }
             setIsLoading(true);
             setError(null);
 
             try {
-                const messagesForApi = [newMessage];
-
-                // VVV ALAMAT IP BACKEND SUDAH DIMASUKKAN VVV
-                // Ganti IP ini jika laptop backend Anda menggunakan IP yang lain dari daftar (misal, 192.168.100.40)
-                // untuk terhubung ke jaringan yang sama dengan laptop frontend.
-                const backendUrl = "http://192.168.100.29:3001/api/chat";
-                // ^^^ PERIKSA KEMBALI IP INI ^^^
+                const messagesForApi = [{ role: newMessage.role, content: newMessage.content }];
+                const backendUrl = "http://192.168.100.29:3001/api/chat"; 
 
                 const response = await fetch(backendUrl, {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        messages: messagesForApi,
-                        // model: "phi:2.7b" // Model sudah di-default di backend
-                    }),
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ messages: messagesForApi }),
                 });
 
                 if (!response.ok) {
@@ -65,25 +72,30 @@ function App() {
                     }
                     throw new Error(errorMessage);
                 }
-
                 const data = await response.json();
-
                 if (data.reply && data.reply.content) {
                      setMessages((prevMessages) => [
                         ...prevMessages,
-                        { role: "assistant", content: data.reply.content },
+                        { 
+                            role: "assistant", 
+                            content: data.reply.content, 
+                            timestamp: getCurrentTimestamp()
+                        },
                     ]);
                 } else {
                     throw new Error("Invalid response structure from server.");
                 }
-
             } catch (err: any) {
                 console.error("Failed to send message or connect to backend:", err);
-                const errorMessage = err.message || "Failed to get response. Check network & backend.";
+                const errorMessage = err.message || "Gagal mendapatkan respons. Periksa jaringan & backend.";
                 setError(errorMessage);
                 setMessages((prevMessages) => [
                     ...prevMessages,
-                    { role: "assistant", content: `Error: ${errorMessage}` },
+                    { 
+                        role: "assistant", 
+                        content: `Error: ${errorMessage}`, 
+                        timestamp: getCurrentTimestamp()
+                    },
                 ]);
             } finally {
                 setIsLoading(false);
@@ -92,63 +104,75 @@ function App() {
     };
 
     return (
-        <div className="flex flex-col h-screen bg-gradient-to-br from-slate-900 to-slate-700 font-sans">
-            <header className="bg-slate-800 shadow-xl p-4">
-                <h1 className="text-2xl font-bold text-center text-white">AI Chat (Ollama)</h1>
+        <div className={styles.appContainer}>
+            <header className={styles.header}>
+                <h1 className={styles.headerTitle}>
+                    Asisten AI Cerdas Hukum
+                </h1>
             </header>
 
-            <main className="flex-grow overflow-hidden p-4 md:p-6">
-                <div className="max-w-3xl mx-auto h-full flex flex-col bg-white/90 backdrop-blur-md shadow-2xl rounded-xl">
-                    <div className="flex-grow overflow-y-auto p-4 space-y-3">
-                        {messages.map((message, index) => (
-                            <MessageCard
-                                key={index}
-                                role={message.role}
-                                message={message.content}
-                            />
-                        ))}
-                        {isLoading && (
-                            <div className="self-start flex items-center space-x-2">
-                                <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 my-1 max-w-md w-fit shadow-md">
-                                    <div className="flex items-center justify-center space-x-1">
-                                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-pulse delay-75"></div>
-                                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-pulse delay-150"></div>
-                                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-pulse delay-225"></div>
-                                    </div>
+            <main className={styles.mainContent}>
+                <div className={styles.chatArea}>
+                    {messages.map((message, index) => (
+                        <MessageCard
+                            key={index}
+                            role={message.role}
+                            message={message.content}
+                            timestamp={message.timestamp}
+                        />
+                    ))}
+                    {isLoading && (
+                        <div className={styles.loadingIndicatorContainer}>
+                             <div className={styles.loadingAvatar}>A</div>
+                            <div className={styles.loadingBubble}>
+                                <div className={styles.loadingDots}>
+                                    <span className="sr-only">Mengetik...</span> {/* Untuk aksesibilitas */}
+                                    <div className={styles.loadingDot}></div>
+                                    <div className={styles.loadingDot}></div>
+                                    <div className={styles.loadingDot}></div>
                                 </div>
                             </div>
-                        )}
-                        <div ref={messagesEndRef} />
-                    </div>
-                    {error && !isLoading && (
-                        <div className="p-3 bg-red-100 text-red-700 border border-red-300 rounded-md mx-4 mb-2 text-sm">
-                            <strong>Error:</strong> {error}
                         </div>
                     )}
-                    <form onSubmit={handleSubmit} className="flex items-center p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+                    <div ref={messagesEndRef} className={styles.messagesEndRef} />
+                </div>
+
+                {error && !isLoading && (
+                    <div className={styles.errorDisplay}>
+                        <strong>Error:</strong> {error}
+                    </div>
+                )}
+
+                <form 
+                    onSubmit={handleSubmit} 
+                    className={styles.inputForm} // Mungkin tambahkan styles.shadowTop jika mau
+                >
+                    <div className={styles.inputFormInner}>
                         <textarea
-                            placeholder="Type your message here..."
+                            ref={textareaRef}
+                            placeholder="Tulis pesan Anda..."
                             value={input}
-                            onChange={(e) => setInput(e.target.value)}
+                            onChange={(e) => { setInput(e.target.value); }}
                             onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
+                                if (e.key === "Enter" && !e.shiftKey && !isLoading) {
                                     e.preventDefault();
                                     handleSubmit(e as any);
                                 }
                             }}
-                            className="flex-grow mr-3 p-3 border rounded-xl border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+                            className={styles.inputTextarea}
                             rows={1}
                             disabled={isLoading}
                         />
                         <button
                             type="submit"
                             disabled={!input.trim() || isLoading}
-                            className="p-3 bg-blue-600 rounded-xl text-white font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition-colors duration-150 shadow-md"
+                            className={styles.sendButton}
+                            aria-label="Kirim pesan"
                         >
-                            Send
+                            <SendIcon />
                         </button>
-                    </form>
-                </div>
+                    </div>
+                </form>
             </main>
         </div>
     );

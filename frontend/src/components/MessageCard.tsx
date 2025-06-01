@@ -1,22 +1,44 @@
-// src/components/MessageCard.tsx
+// frontend/src/components/MessageCard.tsx
 import React from 'react';
+import styles from './MessageCard.module.css'; // Impor CSS Module
 
 type MessageCardProps = {
     role: "assistant" | "user";
     message: string;
-    key?: React.Key;
+    timestamp: string;
 };
 
 export const MessageCard = (props: MessageCardProps) => {
+    const isUser = props.role === "user";
+
     return (
-        <div
-            className={`rounded-lg px-4 py-2 my-1 max-w-xl w-fit whitespace-pre-line shadow-md ${
-                props.role === "user"
-                    ? "bg-blue-600 text-white self-end"
-                    : "bg-slate-200 text-slate-800 self-start"
-            }`}
-        >
-            {props.message}
+        <div className={`${styles.messageWrapper} ${isUser ? styles.user : styles.assistant}`}>
+            {/* Avatar Asisten (di kiri) */}
+            {!isUser && (
+                <div className={`${styles.avatar} ${styles.avatarAssistant}`}>
+                    A
+                </div>
+            )}
+
+            {/* Bubble Pesan dan Timestamp */}
+            <div
+                className={`
+                    ${styles.bubble} 
+                    ${isUser ? styles.bubbleUser : styles.bubbleAssistant}
+                `}
+            >
+                <p className={styles.messageText}>{props.message}</p>
+                <p className={`${styles.timestamp} ${isUser ? styles.timestampUser : styles.timestampAssistant}`}>
+                    {props.timestamp}
+                </p>
+            </div>
+
+            {/* Avatar Pengguna (di kanan) */}
+            {isUser && (
+                <div className={`${styles.avatar} ${styles.avatarUser}`}>
+                    U
+                </div>
+            )}
         </div>
     );
 };
