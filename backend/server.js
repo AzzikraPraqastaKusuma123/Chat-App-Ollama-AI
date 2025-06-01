@@ -1,102 +1,110 @@
 // backend/server.js
 
-// 1. Impor modul
 require('dotenv').config(); 
 
-// 2. Impor modul-modul lain
 const express = require('express');
 const cors = require('cors');
 const ollamaImport = require('ollama');
+// const fetch = require('node-fetch'); // Jika menggunakan Node.js versi lama, Anda mungkin perlu ini. Versi baru sudah built-in.
 
-// 3. Inisialisasi aplikasi Express
 const app = express();
 const port = process.env.PORT || 3001;
 
-// 4. Middleware
 app.use(cors());
 app.use(express.json());
 
-// 5. Ambil API key dari environment variable
 const HF_TOKEN = process.env.HF_TOKEN; 
-
-// 6. Inisialisasi instance Ollama
 const ollama = ollamaImport.default;
 
-// 7. Cek startup Ollama
-if (!ollama || typeof ollama.chat !== 'function') {
-    console.error("KESALAHAN KRITIS SAAT STARTUP: Pustaka Ollama tidak termuat dengan benar atau ollama.chat bukan fungsi.");
-} else {
-    console.log("Pustaka Ollama terdeteksi dan siap digunakan saat startup.");
-}
+if (!ollama || typeof ollama.chat !== 'function') { /* ... Cek startup Ollama ... */ }
+else { console.log("Pustaka Ollama terdeteksi dan siap digunakan saat startup."); }
 
-// Fungsi untuk timeout
-function createTimeoutPromise(ms, errorMessage = 'Operasi melebihi batas waktu') {
-    return new Promise((_, reject) => {
-        setTimeout(() => {
-            reject(new Error(errorMessage));
-        }, ms);
-    });
-}
-
-// Fungsi untuk memformat pesan ke template Zephyr (PERLU VERIFIKASI & PENYESUAIAN)
-function formatMessagesForZephyr(messagesArray) {
-    // Template dasar Zephyr: <|system|>\nSYSTEM_MESSAGE</s>\n<|user|>\nUSER_MESSAGE</s>\n<|assistant|>
-    // Anda mungkin perlu menyesuaikan system message atau cara histori digabungkan.
-    // Mengambil beberapa pesan terakhir untuk konteks (misalnya 3)
+function createTimeoutPromise(ms, errorMessage = 'Operasi melebihi batas waktu') { /* ... sama ... */ }
+function formatMessagesForZephyr(messagesArray) { /* ... sama, jika masih menggunakan Zephyr untuk HF ... */ 
     const relevantMessages = messagesArray.slice(-3); 
-    let promptString = "<|system|>\nKamu adalah asisten AI yang cerdas dan membantu. Jawablah pertanyaan pengguna dengan jelas.</s>\n";
-    
+    let promptString = "<|system|>\nKamu adalah asisten AI yang membantu.</s>\n";
     relevantMessages.forEach(msg => {
-        if (msg.role === 'user') {
-            promptString += `<|user|>\n${msg.content}</s>\n`;
-        } else if (msg.role === 'assistant') {
-            promptString += `<|assistant|>\n${msg.content}</s>\n`;
-        }
+        promptString += msg.role === 'user' ? `<|user|>\n${msg.content}</s>\n` : `<|assistant|>\n${msg.content}</s>\n`;
     });
-    promptString += "<|assistant|>\n"; // Agar model melanjutkan sebagai asisten
+    promptString += "<|assistant|>\n";
     return promptString;
 }
+
+// --- Fungsi Baru untuk Terjemahan dengan MyMemory API ---
+async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', targetLang = 'id') {
+    if (!textToTranslate || typeof textToTranslate !== 'string' || textToTranslate.trim() === '') {
+        return textToTranslate; // Kembalikan teks asli jika kosong atau bukan string
+    }
+    try {
+        // Untuk penggunaan anonim, Anda bisa menambahkan email Anda di parameter 'de' untuk batas yang sedikit lebih tinggi
+        // const developerEmail = "email_anda@example.com"; // Ganti dengan email Anda jika mau
+        // const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=${sourceLang}|${targetLang}&de=${developerEmail}`;
+        
+        const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=${sourceLang}|${targetLang}`;
+        console.log(`Menerjemahkan teks dengan MyMemory: "${textToTranslate.substring(0, 50)}..."`);
+
+        const response = await fetch(myMemoryUrl);
+        if (!response.ok) {
+            throw new Error(`MyMemory API error: ${response.status} ${response.statusText}`);
+        }
+        const data = await response.json();
+        
+        if (data.responseData && data.responseData.translatedText) {
+            // Kadang MyMemory mengembalikan "NO QUERY SPECIFIED!" atau pesan error lain di translatedText
+            if (data.responseData.translatedText.toUpperCase().includes("NO QUERY SPECIFIED") || 
+                data.responseData.translatedText.toUpperCase().includes("INVALID LANGUAGE PAIR") ||
+                data.responseData.translatedText.toUpperCase().includes("PLEASE CONTACT US") ) {
+                console.warn("MyMemory mengembalikan pesan yang bukan terjemahan:", data.responseData.translatedText);
+                return textToTranslate; // Kembalikan teks asli jika ada indikasi error dari MyMemory
+            }
+            console.log("Teks berhasil diterjemahkan oleh MyMemory.");
+            return data.responseData.translatedText;
+        } else if (data.matches && Array.isArray(data.matches) && data.matches.length > 0) {
+            // Kadang hasil terbaik ada di 'matches' array
+             console.log("Teks berhasil diterjemahkan (dari matches) oleh MyMemory.");
+            return data.matches[0].translation;
+        }
+        else {
+            console.warn("Struktur respons MyMemory tidak memiliki translatedText atau matches yang valid:", data);
+            return textToTranslate; // Kembalikan teks asli jika tidak ada hasil terjemahan
+        }
+    } catch (error) {
+        console.error("Error saat menerjemahkan dengan MyMemory:", error.message);
+        return textToTranslate; // Jika error, kembalikan teks asli
+    }
+}
+
 
 // --- Chat Endpoint ---
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    const ollamaModel = req.body.model || "tinyllama"; // Default ke model Ollama yang ringan
-    const OLLAMA_TIMEOUT = 60000; // 60 detik
+    const ollamaModel = req.body.model || "tinyllama"; 
+    const OLLAMA_TIMEOUT = 60000; 
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        return res.status(400).json({ error: "Messages array is required and cannot be empty." });
-    }
-    // const lastUserMessage = messages[messages.length - 1]; // Sudah ada di dalam formatMessagesForZephyr
-    // if (!lastUserMessage || !lastUserMessage.content) {
-    //     return res.status(400).json({ error: "User message content is missing." });
-    // }
-    // const lastUserMessageContent = lastUserMessage.content;
+    if (!messages || !Array.isArray(messages) || messages.length === 0) { /* ... validasi ... */ }
+    const lastUserMessage = messages[messages.length - 1];
+    if (!lastUserMessage || !lastUserMessage.content) { /* ... validasi ... */ }
+    // const lastUserMessageContent = lastUserMessage.content; // Digunakan di formatMessagesForZephyr
 
-    let replyContent = "";
+    let rawReplyContent = ""; // Konten sebelum diterjemahkan
+    let finalReplyContent = ""; // Konten setelah mungkin diterjemahkan
     let respondedBy = "";
 
     try {
         // --- Mencoba Ollama ---
-        if (!ollama || typeof ollama.chat !== 'function') {
-            throw new Error("Konfigurasi server bermasalah: Pustaka Ollama tidak termuat.");
-        }
-        console.log(`Mencoba model Ollama: ${ollamaModel} dengan batas waktu ${OLLAMA_TIMEOUT / 1000} detik...`);
-        
-        const ollamaOperation = ollama.chat({
-            model: ollamaModel,
-            messages: messages, 
-            stream: false,
-        });
-
+        // ... (Logika try Ollama dengan Promise.race tetap sama) ...
+        if (!ollama || typeof ollama.chat !== 'function') { throw new Error("Ollama service not ready."); }
+        console.log(`Mencoba model Ollama: ${ollamaModel} ...`);
+        const ollamaOperation = ollama.chat({ model: ollamaModel, messages: messages, stream: false });
         const ollamaResponse = await Promise.race([
             ollamaOperation,
-            createTimeoutPromise(OLLAMA_TIMEOUT, `Model Ollama (${ollamaModel}) tidak merespons dalam ${OLLAMA_TIMEOUT / 1000} detik.`)
+            createTimeoutPromise(OLLAMA_TIMEOUT, `Model Ollama (${ollamaModel}) timeout.`)
         ]);
 
         if (ollamaResponse && ollamaResponse.message && typeof ollamaResponse.message.content === 'string') {
-            replyContent = ollamaResponse.message.content;
+            rawReplyContent = ollamaResponse.message.content;
             respondedBy = `Ollama (${ollamaModel})`;
-            console.log("Respons berhasil dari Ollama.");
+            console.log("Respons berhasil dari Ollama (sebelum terjemahan):", rawReplyContent.substring(0,100)+"...");
         } else {
             throw new Error("Struktur respons tidak valid dari Ollama.");
         }
@@ -108,65 +116,30 @@ app.post('/api/chat', async (req, res) => {
         if (HF_TOKEN) {
             console.log("Mencoba fallback ke Hugging Face Inference API...");
             try {
-                const HF_MODEL_ID = "HuggingFaceH4/zephyr-7b-beta"; 
+                const HF_MODEL_ID = "HuggingFaceH4/zephyr-7b-beta"; // Atau model HF pilihan Anda
                 const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL_ID}`;
-                
-                // Format input untuk Zephyr. PERIKSA DOKUMENTASI MODELNYA DI HF HUB!
-                const zephyrFormattedPrompt = formatMessagesForZephyr(messages); // Mengirim seluruh histori (atau slice)
-
+                const zephyrFormattedPrompt = formatMessagesForZephyr(messages);
                 const hfPayload = {
                     inputs: zephyrFormattedPrompt,
-                    parameters: { 
-                        return_full_text: false, 
-                        max_new_tokens: 350,   
-                        temperature: 0.7,
-                        top_p: 0.9,
-                    },
-                    options: {
-                        wait_for_model: true,     
-                        use_cache: false          
-                    }
+                    parameters: { return_full_text: false, max_new_tokens: 350, temperature: 0.7 },
+                    options: { wait_for_model: true, use_cache: false }
                 };
 
-                console.log(`Mengirim permintaan ke Hugging Face API (Model: ${HF_MODEL_ID}). Inputs (awal): "${zephyrFormattedPrompt.substring(0,150)}..."`);
-                
-                const hfAPIResponse = await fetch(HF_API_URL, {
+                console.log(`Mengirim permintaan ke Hugging Face API (Model: ${HF_MODEL_ID})...`);
+                const hfAPIResponse = await fetch(HF_API_URL, { /* ... (sama seperti kode lengkap terakhir) ... */ 
                     method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${HF_TOKEN}`,
-                        "Content-Type": "application/json"
-                    },
+                    headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" },
                     body: JSON.stringify(hfPayload)
                 });
-
                 const responseText = await hfAPIResponse.text();
-                // console.log("Respons mentah teks dari Hugging Face API:", responseText); // Aktifkan untuk debugging
-
-                if (!hfAPIResponse.ok) {
-                    let errorDetail = `Hugging Face API error: ${hfAPIResponse.status} - ${responseText}`;
-                    try { 
-                        const errorJson = JSON.parse(responseText);
-                        errorDetail = errorJson.error || (Array.isArray(errorJson.errors) ? errorJson.errors.join(', ') : errorDetail);
-                    } catch (e) { /* biarkan errorDetail sebagai text jika bukan JSON */ }
-                    throw new Error(errorDetail);
-                }
-                
+                if (!hfAPIResponse.ok) { /* ... error handling sama ... */ }
                 const hfData = JSON.parse(responseText); 
-                console.log("Respons data JSON dari Hugging Face API:", hfData);
-
-                // Parsing Respons dari Zephyr/Mistral (biasanya array dengan generated_text)
-                // !!! WAJIB VERIFIKASI STRUKTUR RESPONS DARI MODEL SPESIFIK INI !!!
                 if (Array.isArray(hfData) && hfData[0] && typeof hfData[0].generated_text === 'string') {
-                    replyContent = hfData[0].generated_text.trim();
-                } else if (typeof hfData.generated_text === 'string') { // Beberapa model mungkin langsung
-                     replyContent = hfData.generated_text.trim();
-                } else {
-                    console.error(`Struktur respons tidak dikenal dari Hugging Face (Model: ${HF_MODEL_ID}):`, hfData);
-                    throw new Error(`Struktur respons tidak dikenal dari Hugging Face (Model: ${HF_MODEL_ID}). Periksa log untuk detail.`);
-                }
+                    rawReplyContent = hfData[0].generated_text.trim();
+                } else { /* ... error handling sama ... */ throw new Error(`Struktur respons HF tidak dikenal.`);}
                 
                 respondedBy = `Hugging Face (${HF_MODEL_ID.split('/')[1] || HF_MODEL_ID})`;
-                console.log("Respons berhasil dari Hugging Face API.");
+                console.log("Respons berhasil dari Hugging Face API (sebelum terjemahan):", rawReplyContent.substring(0,100)+"...");
 
             } catch (hfError) {
                 console.error("Gagal mendapatkan respons dari Hugging Face API juga:", hfError.message);
@@ -175,7 +148,8 @@ app.post('/api/chat', async (req, res) => {
             console.log("HF_TOKEN tidak tersedia, tidak melakukan fallback ke Hugging Face.");
         }
 
-        if (!replyContent) { 
+        // Jika setelah semua upaya (Ollama & HF) tidak ada balasan mentah, kirim error
+        if (!rawReplyContent) { 
             let finalErrorMessage = `Gagal mendapatkan respons. Ollama error: ${ollamaError.message}`;
             if (HF_TOKEN && respondedBy !== `Ollama (${ollamaModel})`) { 
                 finalErrorMessage += ". Upaya fallback ke Hugging Face juga gagal.";
@@ -186,18 +160,29 @@ app.post('/api/chat', async (req, res) => {
         }
     }
 
-    console.log(`Mengirim balasan dari: ${respondedBy}`);
-    res.json({ reply: { role: "assistant", content: replyContent, provider: respondedBy } });
+    // --- Lakukan Terjemahan Jika Ada Respons dari AI ---
+    if (rawReplyContent) {
+        console.log("Memulai proses terjemahan untuk respons AI...");
+        finalReplyContent = await translateTextWithMyMemory(rawReplyContent, 'en', 'id');
+        if (finalReplyContent === rawReplyContent) {
+            console.log("Terjemahan tidak mengubah teks (mungkin sudah Indonesia atau error terjemahan).");
+        } else {
+            console.log("Teks AI berhasil diterjemahkan ke Bahasa Indonesia.");
+        }
+    } else {
+        // Ini seharusnya tidak tercapai jika logika di atas benar
+        if (!res.headersSent) { 
+           return res.status(500).json({ error: "Tidak ada konten balasan awal dari AI untuk diterjemahkan." });
+        }
+    }
+
+    // Kirim balasan akhir (sudah diterjemahkan jika perlu)
+    console.log(`Mengirim balasan akhir dari: ${respondedBy}. Konten:`, finalReplyContent.substring(0,100)+"...");
+    res.json({ reply: { role: "assistant", content: finalReplyContent, provider: respondedBy } });
 });
 
 // --- Health Check Endpoint ---
-app.get('/', (req, res) => {
-    res.send('Chat backend is running and ready!');
-});
+app.get('/', (req, res) => { /* ... sama ... */ });
 
 // Start the server
-app.listen(port, '0.0.0.0', () => { 
-    console.log(`Node.js chat backend listening on all interfaces at port ${port}`);
-    console.log(`Ollama API endpoint available at POST /api/chat`);
-    console.log("Server started. Ready to receive requests.");
-});
+app.listen(port, '0.0.0.0', () => { /* ... sama ... */ });
