@@ -120,3 +120,38 @@
   color: #94a3b8; /* text-slate-400 */
   text-align: left;
 }
+/* frontend/src/components/MessageCard.module.css */
+/* ... (style yang sudah ada sebelumnya tetap di atas) ... */
+
+.messageInfo {
+  display: flex;
+  justify-content: space-between; /* Agar timestamp dan tombol terpisah */
+  align-items: center;
+  margin-top: 6px; /* mt-1.5, sama seperti timestamp sebelumnya */
+}
+
+/* Atur ulang margin timestamp jika sekarang ada di flex container */
+.timestamp {
+  margin-top: 0; 
+}
+
+.speakerButton {
+  background-color: transparent;
+  border: none;
+  padding: 2px;
+  margin-left: 8px; /* Jarak dari timestamp */
+  cursor: pointer;
+  color: #94a3b8; /* text-slate-400, sama seperti timestamp asisten */
+  opacity: 0.7;
+  transition: opacity 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+.speakerButton:hover {
+  opacity: 1;
+  color: #64748b; /* text-slate-500 */
+}
+
+.speakerButton svg {
+  width: 1rem; /* w-4 */
+  height: 1rem; /* h-4 */
+}
