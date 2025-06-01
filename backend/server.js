@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const ollamaImport = require('ollama');
-// const { Client } = require("@gradio/client"); // Akan diimpor dinamis untuk Gradio TTS
+// const { Client } = require("@gradio/client"); // Akan diimpor dinamis
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -25,15 +25,34 @@ function createTimeoutPromise(ms, errorMessage = 'Operasi melebihi batas waktu')
     return new Promise((_, reject) => setTimeout(() => reject(new Error(errorMessage)), ms));
 }
 
+// Fungsi untuk memformat pesan ke template Zephyr
+// !!! VERIFIKASI TEMPLATE INI DENGAN DOKUMENTASI ZEPHYR-7B-BETA !!!
 function formatMessagesForZephyr(messagesArray) {
-    const relevantMessages = messagesArray.slice(-5); // Ambil hingga 5 pesan terakhir untuk konteks
+    const relevantMessages = messagesArray.slice(-5); 
     let promptString = "<|system|>\nAnda adalah asisten AI yang membantu dan ramah. Jawablah dengan jelas.</s>\n";
     relevantMessages.forEach(msg => {
         if (msg.role === 'user' || msg.role === 'assistant') { 
             promptString += `<|${msg.role}|>\n${msg.content}</s>\n`;
         }
     });
-    promptString += "<|assistant|>\n"; // Agar model melanjutkan sebagai asisten
+    promptString += "<|assistant|>\n";
+    return promptString;
+}
+
+// Fungsi untuk memformat pesan ke template Llama 3 Instruct
+// !!! VERIFIKASI TEMPLATE INI DENGAN DOKUMENTASI LLAMA-3-8B-INSTRUCT !!!
+function formatMessagesForLlama3(messagesArray, systemMessage = "Anda adalah asisten AI yang membantu dan ramah. Jawablah dengan jelas dalam Bahasa Indonesia.") {
+    const relevantMessages = messagesArray.slice(-5); 
+    let promptString = "<|begin_of_text|>";
+    if (systemMessage) {
+        promptString += `<|start_header_id|>system<|end_header_id|>\n\n${systemMessage}<|eot_id|>`;
+    }
+    relevantMessages.forEach(msg => {
+        if (msg.role === 'user' || msg.role === 'assistant') {
+            promptString += `<|start_header_id|>${msg.role}<|end_header_id|>\n\n${msg.content}<|eot_id|>`;
+        }
+    });
+    promptString += "<|start_header_id|>assistant<|end_header_id|>\n\n";
     return promptString;
 }
 
@@ -63,13 +82,12 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
 
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    const ollamaModelFromRequest = req.body.model; // Ambil model dari request jika ada
-    const ollamaModel = ollamaModelFromRequest || "tinyllama"; // Default ke tinyllama
+    const ollamaModel = req.body.model || "tinyllama"; 
     const OLLAMA_TIMEOUT = 60000; 
     
     let rawReplyContent = ""; 
-    let respondedBy = ""; // Sumber teks AI (Ollama atau HF LLM)
-    let audioProvider = ""; // Sumber audio TTS
+    let respondedBy = ""; 
+    let audioProvider = ""; 
     let audioDataForFrontend = null; 
     let primaryAIError = null;
 
@@ -77,67 +95,92 @@ app.post('/api/chat', async (req, res) => {
         return res.status(400).json({ error: "Messages array is required." });
     }
     
-    // --- Tahap 1: Mendapatkan Respons Teks dari LLM ---
     try { // Mencoba Ollama
         if (!ollama || typeof ollama.chat !== 'function') { throw new Error("Ollama service not ready."); }
         console.log(`Mencoba model Ollama: ${ollamaModel} ...`);
         const ollamaChatMessages = messages.map(m => ({role: m.role, content: m.content}));
         const ollamaOperation = ollama.chat({ model: ollamaModel, messages: ollamaChatMessages, stream: false });
-        
         const ollamaResponse = await Promise.race([
             ollamaOperation,
             createTimeoutPromise(OLLAMA_TIMEOUT, `Model Ollama (${ollamaModel}) timeout.`)
         ]);
-
         if (ollamaResponse && ollamaResponse.message && typeof ollamaResponse.message.content === 'string') {
             rawReplyContent = ollamaResponse.message.content;
             respondedBy = `Ollama (${ollamaModel})`;
             console.log("Respons teks dari Ollama:", rawReplyContent.substring(0,100)+"...");
-        } else {
-            throw new Error("Struktur respons tidak valid dari Ollama.");
-        }
+        } else { throw new Error("Struktur respons tidak valid dari Ollama."); }
     } catch (ollamaError) {
         console.warn(`Gagal mendapatkan respons dari Ollama (${ollamaModel}): ${ollamaError.message}`);
-        primaryAIError = ollamaError; // Simpan error dari Ollama
+        primaryAIError = ollamaError; 
         
-        // Jika Ollama gagal, coba fallback ke Hugging Face LLM (Zephyr)
         if (HF_TOKEN) {
+            // --- Fallback 1: Mencoba Hugging Face LLM (Zephyr) ---
             console.log("Ollama gagal, mencoba fallback LLM ke Hugging Face (Zephyr)...");
             try {
-                const HF_LLM_MODEL_ID = "HuggingFaceH4/zephyr-7b-beta"; 
-                const HF_LLM_API_URL = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID}`;
-                const zephyrFormattedPrompt = formatMessagesForZephyr(messages); // Gunakan semua messages untuk konteks Zephyr
-
-                const hfLLMPayload = {
+                const HF_LLM_MODEL_ID_ZEPHYR = "HuggingFaceH4/zephyr-7b-beta"; 
+                const HF_LLM_API_URL_ZEPHYR = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_ZEPHYR}`;
+                const zephyrFormattedPrompt = formatMessagesForZephyr(messages); 
+                const hfZephyrPayload = {
                     inputs: zephyrFormattedPrompt,
                     parameters: { return_full_text: false, max_new_tokens: 350, temperature: 0.7, top_p: 0.9 },
                     options: { wait_for_model: true, use_cache: false }
                 };
-
-                console.log(`Mengirim permintaan ke Hugging Face LLM API (Model: ${HF_LLM_MODEL_ID}). Inputs (awal): "${zephyrFormattedPrompt.substring(0,150)}..."`);
-                
-                const hfLLMResponse = await fetch(HF_LLM_API_URL, {
+                console.log(`Mengirim permintaan ke HF LLM API (Zephyr). Inputs (awal): "${zephyrFormattedPrompt.substring(0,150)}..."`);
+                const hfZephyrResponse = await fetch(HF_LLM_API_URL_ZEPHYR, {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" },
-                    body: JSON.stringify(hfLLMPayload)
+                    body: JSON.stringify(hfZephyrPayload)
                 });
-
-                const responseLLMText = await hfLLMResponse.text();
-                if (!hfLLMResponse.ok) { 
-                    let errorDetail = `HF LLM API error: ${hfLLMResponse.status} - ${responseLLMText}`;
-                    try { const errorJson = JSON.parse(responseLLMText); errorDetail = errorJson.error || (Array.isArray(errorJson.errors) ? errorJson.errors.join(', ') : errorDetail); } catch (e) {}
+                const responseZephyrText = await hfZephyrResponse.text();
+                if (!hfZephyrResponse.ok) { 
+                    let errorDetail = `HF LLM API error (Zephyr): ${hfZephyrResponse.status} - ${responseZephyrText}`;
+                    try { const errorJson = JSON.parse(responseZephyrText); errorDetail = errorJson.error || (Array.isArray(errorJson.errors) ? errorJson.errors.join(', ') : errorDetail); } catch (e) {}
                     throw new Error(errorDetail);
                 }
-                const hfLLMData = JSON.parse(responseLLMText); 
-                if (Array.isArray(hfLLMData) && hfLLMData[0] && typeof hfLLMData[0].generated_text === 'string') {
-                    rawReplyContent = hfLLMData[0].generated_text.trim(); // Dapat respons dari fallback LLM
-                    respondedBy = `Hugging Face (${HF_LLM_MODEL_ID.split('/')[1] || HF_LLM_MODEL_ID})`;
-                    console.log("Respons teks dari Hugging Face LLM:", rawReplyContent.substring(0,100)+"...");
-                    primaryAIError = null; // Reset error Ollama karena fallback LLM berhasil
-                } else { throw new Error(`Struktur respons HF LLM tidak dikenal untuk model ${HF_LLM_MODEL_ID}.`);}
-            } catch (hfLlmError) {
-                console.error("Gagal mendapatkan respons dari Hugging Face LLM juga:", hfLlmError.message);
-                // Jika fallback LLM juga gagal, primaryAIError (dari Ollama) akan tetap digunakan.
+                const hfZephyrData = JSON.parse(responseZephyrText); 
+                if (Array.isArray(hfZephyrData) && hfZephyrData[0] && typeof hfZephyrData[0].generated_text === 'string') {
+                    rawReplyContent = hfZephyrData[0].generated_text.trim(); 
+                    respondedBy = `Hugging Face (Zephyr)`;
+                    console.log("Respons teks dari Hugging Face LLM (Zephyr):", rawReplyContent.substring(0,100)+"...");
+                    primaryAIError = null; 
+                } else { throw new Error(`Struktur respons HF LLM (Zephyr) tidak dikenal.`);}
+            } catch (zephyrError) {
+                console.error("Gagal dari HF LLM (Zephyr):", zephyrError.message);
+                // Jika Zephyr gagal, primaryAIError (dari Ollama) masih ada, kita akan coba Llama 3
+
+                console.log("Zephyr gagal, mencoba fallback LLM ke Hugging Face (Llama 3)...");
+                try { // Fallback 2: Llama 3
+                    const HF_LLM_MODEL_ID_LLAMA3 = "meta-llama/Llama-3-8B-Instruct"; 
+                    const HF_LLM_API_URL_LLAMA3 = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_LLAMA3}`;
+                    const llama3FormattedInputs = formatMessagesForLlama3(messages); // Gunakan fungsi format Llama 3
+                    const hfLlama3Payload = {
+                        inputs: llama3FormattedInputs,
+                        parameters: { return_full_text: false, max_new_tokens: 450, temperature: 0.6, top_p: 0.9 },
+                        options: { wait_for_model: true, use_cache: false }
+                    };
+                    console.log(`Mengirim permintaan ke HF LLM API (Llama 3). Inputs (awal): "${llama3FormattedInputs.substring(0,200)}..."`);
+                    const hfLlama3Response = await fetch(HF_LLM_API_URL_LLAMA3, {
+                        method: "POST",
+                        headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" },
+                        body: JSON.stringify(hfLlama3Payload)
+                    });
+                    const responseLlama3Text = await hfLlama3Response.text();
+                    if (!hfLlama3Response.ok) { 
+                        let errorDetail = `HF LLM API error (Llama 3): ${hfLlama3Response.status} - ${responseLlama3Text}`;
+                        try { const errorJson = JSON.parse(responseLlama3Text); errorDetail = errorJson.error || (Array.isArray(errorJson.errors) ? errorJson.errors.join(', ') : errorDetail); } catch (e) {}
+                        throw new Error(errorDetail);
+                    }
+                    const hfLlama3Data = JSON.parse(responseLlama3Text); 
+                    if (Array.isArray(hfLlama3Data) && hfLlama3Data[0] && typeof hfLlama3Data[0].generated_text === 'string') {
+                        rawReplyContent = hfLlama3Data[0].generated_text.trim(); 
+                        respondedBy = `Hugging Face (Llama 3)`;
+                        console.log("Respons teks dari Hugging Face LLM (Llama 3):", rawReplyContent.substring(0,100)+"...");
+                        primaryAIError = null; 
+                    } else { throw new Error(`Struktur respons HF LLM (Llama 3) tidak dikenal.`);}
+                } catch (llama3Error) {
+                    console.error("Gagal mendapatkan respons dari Hugging Face LLM (Llama 3) juga:", llama3Error.message);
+                    // Jika Llama 3 juga gagal, primaryAIError (dari Ollama) akan tetap digunakan.
+                }
             }
         } else {
             console.log("HF_TOKEN tidak tersedia, tidak melakukan fallback LLM ke Hugging Face.");
@@ -146,17 +189,16 @@ app.post('/api/chat', async (req, res) => {
 
     // --- Tahap 2: Menentukan Teks Final untuk Diproses (Terjemahan & TTS) ---
     let textForProcessing = "";
-    if (rawReplyContent) { // Jika ada respons dari Ollama atau HF LLM
+    if (rawReplyContent) { 
         textForProcessing = rawReplyContent;
-    } else if (primaryAIError) { // Jika semua LLM gagal, gunakan pesan error Ollama
+    } else if (primaryAIError) { 
         textForProcessing = `Maaf, terjadi masalah dengan AI: ${primaryAIError.message}`;
-        if (respondedBy === "") respondedBy = "Sistem Error (Ollama)"; // Tandai sumber error
-    } else { // Kasus yang seharusnya tidak terjadi jika input valid
-        textForProcessing = "Maaf, terjadi kesalahan internal yang tidak terduga.";
+        if (respondedBy === "") respondedBy = `Sistem Error (Sumber: ${ollamaModel || 'Ollama'})`;
+    } else { 
+        textForProcessing = "Maaf, terjadi kesalahan internal yang tidak terduga dalam pemrosesan AI.";
         if (respondedBy === "") respondedBy = "Sistem Error (Umum)";
     }
 
-    // Terjemahan teks
     const finalReplyContent = await translateTextWithMyMemory(textForProcessing, 'en', 'id');
     if (finalReplyContent !== textForProcessing) {
         console.log("Teks AI berhasil diterjemahkan ke Bahasa Indonesia.");
@@ -173,8 +215,8 @@ app.post('/api/chat', async (req, res) => {
             
             const ttsResult = await gradioClient.predict("/text_to_speech_app", { 		
                 prompt: finalReplyContent, 
-                voice: "alloy",      // VERIFIKASI & SESUAIKAN
-                emotion: "neutral",  // VERIFIKASI & SESUAIKAN
+                voice: "alloy",      // !!! VERIFIKASI & SESUAIKAN !!!
+                emotion: "neutral",  // !!! VERIFIKASI & SESUAIKAN !!!
                 use_random_seed: true, 		
                 specific_seed: Math.floor(Math.random() * 100000), 
             });
@@ -182,13 +224,13 @@ app.post('/api/chat', async (req, res) => {
             console.log("Hasil mentah dari Gradio TTS predict:", JSON.stringify(ttsResult, null, 2));
             if (ttsResult && ttsResult.data && Array.isArray(ttsResult.data) && ttsResult.data[0]) {
                 const audioInfo = ttsResult.data[0];
-                if (audioInfo.url || (audioInfo.data && audioInfo.name)) { // Cek jika ada URL atau data base64
+                if (audioInfo.url || (audioInfo.data && audioInfo.name) || (audioInfo.path && audioInfo.is_file)) { 
                     audioDataForFrontend = audioInfo; 
                     console.log("Data audio berhasil didapatkan dari Gradio:", audioDataForFrontend);
                     audioProvider = "NihalGazi/TTS (Gradio)";
                     if (ttsResult.data[1]) console.log("Status dari Gradio TTS:", ttsResult.data[1]);
                 } else {
-                     console.warn("Gradio mengembalikan data[0], tetapi tidak ada 'url' atau 'data+name' yang valid:", audioInfo);
+                     console.warn("Gradio mengembalikan data[0], tetapi tidak ada 'url' atau 'data+name' atau 'path (file)' yang valid:", audioInfo);
                 }
             } else {
                 console.warn("Gradio tidak mengembalikan data audio yang diharapkan dalam result.data[0]:", ttsResult.data);
