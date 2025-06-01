@@ -41,7 +41,8 @@ function createTimeoutPromise(ms, errorMessage = 'Operasi melebihi batas waktu')
 // --- Chat Endpoint ---
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    const ollamaModel = req.body.model || "gemma:2b"; // Model Ollama default
+    // Model Ollama default diatur ke tinyllama untuk stabilitas awal
+    const ollamaModel = req.body.model || "tinyllama"; 
     const OLLAMA_TIMEOUT = 60000; // 60 detik
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -89,29 +90,35 @@ app.post('/api/chat', async (req, res) => {
         if (HF_TOKEN) {
             console.log("Mencoba fallback ke Hugging Face Inference API...");
             try {
-                const HF_MODEL_ID = "deepseek-ai/DeepSeek-R1-0528"; // Model dari screenshot Anda
+                const HF_MODEL_ID = "deepseek-ai/DeepSeek-R1-0528"; 
                 const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL_ID}`;
                 
-                // !!! PENTING: SESUAIKAN PAYLOAD INI BERDASARKAN DOKUMENTASI MODEL HF_MODEL_ID !!!
-                // Contoh ini mengirimkan seluruh histori chat, yang umum untuk model chat.
-                // Beberapa model mungkin hanya butuh `inputs: lastUserMessageContent`.
+                // !!! PENTING: SESUAIKAN PAYLOAD INI BERDASARKAN DOKUMENTASI MODEL HF_MODEL_ID DI HUGGING FACE !!!
+                // Contoh ini mengirimkan seluruh histori chat. Model DeepSeek mungkin mengharapkan ini atau format lain.
                 const hfPayload = {
                     inputs: {
-                         messages: messages.map(m => ({role: m.role, content: m.content})) 
+                        // Format umum untuk model chat di HF adalah array 'messages'
+                        // atau terkadang hanya 'text' untuk prompt tunggal.
+                        // VERIFIKASI INI DI HALAMAN MODEL HUGGING FACE!
+                        messages: messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
                     },
-                    // Atau jika model hanya menerima string:
-                    // inputs: lastUserMessageContent,
-                    parameters: { // Parameter opsional, sesuaikan dengan kebutuhan
-                        return_full_text: false, // Biasanya false untuk chat agar tidak mengulang input
-                        max_new_tokens: 300,   // Batasi panjang output
+                    parameters: { 
+                        return_full_text: false, 
+                        max_new_tokens: 350,   
                         temperature: 0.7,
+                        top_p: 0.9,
                     },
                     options: {
-                        wait_for_model: true 
+                        wait_for_model: true,     
+                        use_cache: false          
                     }
                 };
+                // Jika model hanya menerima string 'inputs':
+                // const hfPayload = { inputs: lastUserMessageContent, parameters: { max_new_tokens: 350, return_full_text: false }, options: { wait_for_model: true, use_cache: false }};
 
-                console.log(`Mengirim permintaan ke Hugging Face API (Model: ${HF_MODEL_ID}). Payload inputs:`, JSON.stringify(hfPayload.inputs));
+
+                console.log(`Mengirim permintaan ke Hugging Face API (Model: ${HF_MODEL_ID}). Payload inputs:`, JSON.stringify(hfPayload.inputs, null, 2));
+                
                 const hfAPIResponse = await fetch(HF_API_URL, {
                     method: "POST",
                     headers: {
@@ -128,34 +135,25 @@ app.post('/api/chat', async (req, res) => {
                     let errorDetail = `Hugging Face API error: ${hfAPIResponse.status} - ${responseText}`;
                     try { 
                         const errorJson = JSON.parse(responseText);
-                        errorDetail = errorJson.error || (errorJson.errors && errorJson.errors[0]) || errorDetail; 
-                    } catch (e) { /* abaikan jika bukan JSON */ }
+                        errorDetail = errorJson.error || (Array.isArray(errorJson.errors) ? errorJson.errors.join(', ') : errorDetail);
+                    } catch (e) { /* biarkan errorDetail sebagai text jika bukan JSON */ }
                     throw new Error(errorDetail);
                 }
                 
                 const hfData = JSON.parse(responseText); 
                 console.log("Respons data JSON dari Hugging Face API:", hfData);
 
-
                 // !!! PENTING: SESUAIKAN CARA PARSING RESPONS INI BERDASARKAN OUTPUT MODEL HF_MODEL_ID !!!
-                // Contoh umum (bisa sangat berbeda antar model):
-                if (hfData.choices && hfData.choices[0] && hfData.choices[0].message && typeof hfData.choices[0].message.content === 'string') { // Mirip OpenAI
+                // Ini sangat krusial dan berbeda untuk setiap model!
+                if (hfData.choices && hfData.choices[0] && hfData.choices[0].message && typeof hfData.choices[0].message.content === 'string') {
                     replyContent = hfData.choices[0].message.content;
-                } else if (Array.isArray(hfData) && hfData[0] && typeof hfData[0].generated_text === 'string') { // Umum untuk text-generation
-                    let genText = hfData[0].generated_text;
-                    // Jika model mengembalikan prompt input, coba hapus
-                    // if (hfPayload.inputs && typeof hfPayload.inputs === 'string' && genText.startsWith(hfPayload.inputs)) { 
-                    //     genText = genText.substring(hfPayload.inputs.length).trim();
-                    // } else if (hfPayload.inputs && hfPayload.inputs.messages && genText.startsWith(lastUserMessageContent)){
-                    //     genText = genText.substring(lastUserMessageContent.length).trim();
-                    // }
-                    replyContent = genText;
-                } else if (typeof hfData.generated_text === 'string') { // Beberapa model lain
+                } else if (Array.isArray(hfData) && hfData[0] && typeof hfData[0].generated_text === 'string') {
+                    replyContent = hfData[0].generated_text;
+                } else if (typeof hfData.generated_text === 'string') { 
                      replyContent = hfData.generated_text;
-                }
-                 else {
+                } else {
                     console.error(`Struktur respons tidak dikenal atau tidak ada teks balasan dari Hugging Face (Model: ${HF_MODEL_ID}):`, hfData);
-                    throw new Error(`Struktur respons tidak dikenal dari Hugging Face (Model: ${HF_MODEL_ID}).`);
+                    throw new Error(`Struktur respons tidak dikenal dari Hugging Face (Model: ${HF_MODEL_ID}). Periksa log untuk detail.`);
                 }
                 
                 respondedBy = `Hugging Face (${HF_MODEL_ID.split('/')[1] || HF_MODEL_ID})`;
