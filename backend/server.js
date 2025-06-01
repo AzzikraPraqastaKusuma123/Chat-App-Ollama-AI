@@ -38,21 +38,39 @@ function createTimeoutPromise(ms, errorMessage = 'Operasi melebihi batas waktu')
     });
 }
 
+// Fungsi untuk memformat pesan ke template Zephyr (PERLU VERIFIKASI & PENYESUAIAN)
+function formatMessagesForZephyr(messagesArray) {
+    // Template dasar Zephyr: <|system|>\nSYSTEM_MESSAGE</s>\n<|user|>\nUSER_MESSAGE</s>\n<|assistant|>
+    // Anda mungkin perlu menyesuaikan system message atau cara histori digabungkan.
+    // Mengambil beberapa pesan terakhir untuk konteks (misalnya 3)
+    const relevantMessages = messagesArray.slice(-3); 
+    let promptString = "<|system|>\nKamu adalah asisten AI yang cerdas dan membantu. Jawablah pertanyaan pengguna dengan jelas.</s>\n";
+    
+    relevantMessages.forEach(msg => {
+        if (msg.role === 'user') {
+            promptString += `<|user|>\n${msg.content}</s>\n`;
+        } else if (msg.role === 'assistant') {
+            promptString += `<|assistant|>\n${msg.content}</s>\n`;
+        }
+    });
+    promptString += "<|assistant|>\n"; // Agar model melanjutkan sebagai asisten
+    return promptString;
+}
+
 // --- Chat Endpoint ---
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    // Model Ollama default diatur ke tinyllama untuk stabilitas awal
-    const ollamaModel = req.body.model || "tinyllama"; 
+    const ollamaModel = req.body.model || "tinyllama"; // Default ke model Ollama yang ringan
     const OLLAMA_TIMEOUT = 60000; // 60 detik
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ error: "Messages array is required and cannot be empty." });
     }
-    const lastUserMessage = messages[messages.length - 1];
-    if (!lastUserMessage || !lastUserMessage.content) {
-        return res.status(400).json({ error: "User message content is missing." });
-    }
-    const lastUserMessageContent = lastUserMessage.content;
+    // const lastUserMessage = messages[messages.length - 1]; // Sudah ada di dalam formatMessagesForZephyr
+    // if (!lastUserMessage || !lastUserMessage.content) {
+    //     return res.status(400).json({ error: "User message content is missing." });
+    // }
+    // const lastUserMessageContent = lastUserMessage.content;
 
     let replyContent = "";
     let respondedBy = "";
@@ -90,18 +108,14 @@ app.post('/api/chat', async (req, res) => {
         if (HF_TOKEN) {
             console.log("Mencoba fallback ke Hugging Face Inference API...");
             try {
-                const HF_MODEL_ID = "deepseek-ai/DeepSeek-R1-0528"; 
+                const HF_MODEL_ID = "HuggingFaceH4/zephyr-7b-beta"; 
                 const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL_ID}`;
                 
-                // !!! PENTING: SESUAIKAN PAYLOAD INI BERDASARKAN DOKUMENTASI MODEL HF_MODEL_ID DI HUGGING FACE !!!
-                // Contoh ini mengirimkan seluruh histori chat. Model DeepSeek mungkin mengharapkan ini atau format lain.
+                // Format input untuk Zephyr. PERIKSA DOKUMENTASI MODELNYA DI HF HUB!
+                const zephyrFormattedPrompt = formatMessagesForZephyr(messages); // Mengirim seluruh histori (atau slice)
+
                 const hfPayload = {
-                    inputs: {
-                        // Format umum untuk model chat di HF adalah array 'messages'
-                        // atau terkadang hanya 'text' untuk prompt tunggal.
-                        // VERIFIKASI INI DI HALAMAN MODEL HUGGING FACE!
-                        messages: messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
-                    },
+                    inputs: zephyrFormattedPrompt,
                     parameters: { 
                         return_full_text: false, 
                         max_new_tokens: 350,   
@@ -113,11 +127,8 @@ app.post('/api/chat', async (req, res) => {
                         use_cache: false          
                     }
                 };
-                // Jika model hanya menerima string 'inputs':
-                // const hfPayload = { inputs: lastUserMessageContent, parameters: { max_new_tokens: 350, return_full_text: false }, options: { wait_for_model: true, use_cache: false }};
 
-
-                console.log(`Mengirim permintaan ke Hugging Face API (Model: ${HF_MODEL_ID}). Payload inputs:`, JSON.stringify(hfPayload.inputs, null, 2));
+                console.log(`Mengirim permintaan ke Hugging Face API (Model: ${HF_MODEL_ID}). Inputs (awal): "${zephyrFormattedPrompt.substring(0,150)}..."`);
                 
                 const hfAPIResponse = await fetch(HF_API_URL, {
                     method: "POST",
@@ -143,16 +154,14 @@ app.post('/api/chat', async (req, res) => {
                 const hfData = JSON.parse(responseText); 
                 console.log("Respons data JSON dari Hugging Face API:", hfData);
 
-                // !!! PENTING: SESUAIKAN CARA PARSING RESPONS INI BERDASARKAN OUTPUT MODEL HF_MODEL_ID !!!
-                // Ini sangat krusial dan berbeda untuk setiap model!
-                if (hfData.choices && hfData.choices[0] && hfData.choices[0].message && typeof hfData.choices[0].message.content === 'string') {
-                    replyContent = hfData.choices[0].message.content;
-                } else if (Array.isArray(hfData) && hfData[0] && typeof hfData[0].generated_text === 'string') {
-                    replyContent = hfData[0].generated_text;
-                } else if (typeof hfData.generated_text === 'string') { 
-                     replyContent = hfData.generated_text;
+                // Parsing Respons dari Zephyr/Mistral (biasanya array dengan generated_text)
+                // !!! WAJIB VERIFIKASI STRUKTUR RESPONS DARI MODEL SPESIFIK INI !!!
+                if (Array.isArray(hfData) && hfData[0] && typeof hfData[0].generated_text === 'string') {
+                    replyContent = hfData[0].generated_text.trim();
+                } else if (typeof hfData.generated_text === 'string') { // Beberapa model mungkin langsung
+                     replyContent = hfData.generated_text.trim();
                 } else {
-                    console.error(`Struktur respons tidak dikenal atau tidak ada teks balasan dari Hugging Face (Model: ${HF_MODEL_ID}):`, hfData);
+                    console.error(`Struktur respons tidak dikenal dari Hugging Face (Model: ${HF_MODEL_ID}):`, hfData);
                     throw new Error(`Struktur respons tidak dikenal dari Hugging Face (Model: ${HF_MODEL_ID}). Periksa log untuk detail.`);
                 }
                 
