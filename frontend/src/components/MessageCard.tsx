@@ -1,4 +1,4 @@
-// frontend/src/components/MessageCard.tsx
+
 import React from 'react';
 import styles from './MessageCard.module.css';
 

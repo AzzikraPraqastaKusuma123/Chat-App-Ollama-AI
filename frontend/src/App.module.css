@@ -1,223 +1,373 @@
 /* frontend/src/App.module.css */
+
 .appContainer {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #f1f5f9; /* bg-gray-100 */
+  background-color: var(--background-app); /* Latar belakang utama aplikasi */
+  font-family: var(--primary-font);
+  overflow: hidden; /* Mencegah scroll di body */
 }
 
-.header {
-  background-image: linear-gradient(to right, #4f46e5, #7c3aed, #a855f7);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  padding: 1rem;
+.appHeader {
+  background-image: linear-gradient(to right, var(--brand-blue-DEFAULT), var(--brand-indigo-DEFAULT), var(--brand-purple-DEFAULT));
+  box-shadow: var(--shadow-md);
+  padding: 0.9rem 1.5rem; /* 14.4px 24px */
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 100;
+  color: var(--text-on-primary-brand);
+  text-align: center;
 }
 
-.headerTitle {
-  font-size: 1.25rem; /* text-xl */
-  line-height: 1.75rem; /* disesuaikan */
+.appHeader h1 {
+  font-size: 1.25rem; /* 20px */
   font-weight: 600;
-  text-align: center;
-  color: white;
+  margin: 0;
+  letter-spacing: 0.02em;
 }
+
 @media (min-width: 768px) {
-  .headerTitle {
-    font-size: 1.5rem; /* text-2xl */
-    line-height: 2rem;
+  .appHeader h1 {
+    font-size: 1.375rem; /* 22px */
   }
+}
+
+.ttsWaveformContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 4px;
+  padding-bottom: 0;
+  width: 100%;
+  /* Bisa diatur posisinya jika ingin overlay, contoh: */
+  /* position: absolute; bottom: -35px; left: 50%; transform: translateX(-50%); */
+  pointer-events: none;
 }
 
 .mainContent {
   flex-grow: 1;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  /* padding-bottom: 8px; /* Dihapus agar form input bisa sticky dengan benar */
+  overflow: hidden; /* Penting agar child bisa scroll */
+  position: relative; /* Untuk positioning waveform STT */
 }
 
-.chatArea {
+.messagesListContainer {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 1rem; 
+  padding: 0.75rem; /* 12px */
   width: 100%;
-  max-width: 896px;
+  max-width: 820px; /* Lebar maksimal area chat */
   margin-left: auto;
   margin-right: auto;
 }
+
 @media (min-width: 768px) {
-  .chatArea {
-    padding: 1.5rem; 
+  .messagesListContainer {
+    padding: 1.25rem; /* 20px */
   }
 }
 
-.messagesEndRef {
-  height: 4px;
-}
-
-.loadingIndicatorContainer {
+/* STT Waveform (Radial - Mikrofon) */
+.waveformContainerRadial {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  margin: 8px 0;
-  width: 100%;
-  justify-content: flex-start;
-}
-
-.loadingAvatar {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 9999px;
-  background-image: linear-gradient(to bottom right, #64748b, #475569);
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-}
-
-.loadingBubble {
-  background-color: white;
-  color: #334155;
-  border-radius: 1rem 1rem 0.5rem 1rem; /* tr tl bl br */
-  border: 1px solid #e2e8f0;
-  padding: 1rem 1.25rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-}
-
-.loadingDots {
-  display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.loadingDot {
-  width: 10px;
-  height: 10px;
-  background-color: #94a3b8;
-  border-radius: 9999px;
-  animation: appBounceKeyframe 1.4s infinite ease-in-out both; /* Nama keyframe diubah */
-}
-
-.loadingDot:nth-child(1) { animation-delay: 0s; }
-.loadingDot:nth-child(2) { animation-delay: 0.15s; }
-.loadingDot:nth-child(3) { animation-delay: 0.3s; } /* Ditambahkan jika ingin 3 titik */
-
-@keyframes appBounceKeyframe { /* Nama keyframe diubah */
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1.0); }
-}
-
-.errorDisplay {
-  padding: 0.75rem;
-  background-color: #fee2e2; /* red-100 */
-  color: #b91c1c; /* red-700 */
-  border-top: 1px solid #fecaca; /* red-200 */
-  font-size: 0.875rem;
-  text-align: center;
-  width: 100%;
-  max-width: 896px;
+  padding: 1rem 0; /* 16px */
+  margin-bottom: 0.5rem; /* 8px */
+  background-color: rgba(26, 32, 44, 0.95); /* Tailwind gray-900 dengan sedikit transparansi */
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border-radius: 12px;
+  max-width: 320px;
+  width: calc(100% - 2rem); /* Lebar relatif dengan padding */
   margin-left: auto;
   margin-right: auto;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid rgba(255,255,255,0.05);
+  position: absolute; /* Agar bisa di tengah bawah area pesan */
+  bottom: 0; /* Akan disesuaikan oleh form input di bawahnya */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20; /* Di atas list pesan, di bawah input form */
+}
+/* Ini akan ditempatkan di atas form input, jadi form input harus punya padding-bottom yang cukup */
+.messageInputFormPaddedForWaveform {
+  padding-bottom: 220px !important; /* Sesuaikan dengan tinggi waveformContainerRadial + margin */
+}
+@media (min-width: 768px) {
+    .messageInputFormPaddedForWaveform {
+        padding-bottom: 240px !important;
+    }
 }
 
-.inputForm {
+
+.voiceWaveformCanvasRadial {
+  /* Styling diatur via props JS */
+}
+
+.listeningText {
+  color: #a0aec0; /* Tailwind gray-400 */
+  font-size: 0.8rem; /* 12.8px */
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+.messageInputForm {
   position: sticky;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.95); /* bg-white/95 */
-  /* backdrop-filter: blur(2px); /* backdrop-blur-sm (lebih kecil) */
-  border-top: 1px solid #e5e7eb; /* gray-200 */
-  padding: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border-light);
+  padding: 0.75rem 1rem; /* 12px 16px */
   width: 100%;
-  z-index: 10;
-  /* box-shadow: 0 -2px 5px rgba(0,0,0,0.05); /* Shadow atas lebih halus */
-}
-@media (min-width: 768px) {
-  .inputForm { padding: 1rem; }
+  z-index: 50;
+  transition: padding-bottom 0.3s ease-out; /* Untuk animasi saat waveform STT muncul */
 }
 
-.inputFormInner {
-  max-width: 896px;
+@media (min-width: 768px) {
+  .messageInputForm {
+    padding: 1rem 1.5rem;
+  }
+}
+
+.inputFormInnerWrapper {
+  max-width: 820px;
   margin-left: auto;
   margin-right: auto;
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  align-items: flex-end; /* Penting untuk textarea multi-baris */
+  gap: 0.625rem; /* 10px antar elemen form */
 }
 
-.inputTextarea {
+.inputTextArea {
   flex-grow: 1;
-  padding: 0.75rem;
-  font-size: 0.875rem;
-  background-color: white;
-  border: 2px solid #cbd5e1; /* slate-300 */
-  border-radius: 0.75rem; /* rounded-xl (dulu 0.5rem) */
+  padding: 0.625rem 1rem; /* 10px 16px */
+  font-size: 0.9rem; /* 14.4px */
+  font-family: var(--primary-font);
+  background-color: var(--surface-input);
+  border: 1.5px solid var(--border-medium);
+  border-radius: 10px; /* Sedikit lebih besar */
   outline: none;
   resize: none;
-  min-height: 48px;
-  max-height: 128px; /* max-h-32 */
-  overflow-y: auto;
-  line-height: 1.6;
-  transition-property: border-color, box-shadow;
-  transition-duration: 150ms;
+  min-height: 44px; /* Sesuaikan dengan tinggi tombol */
+  max-height: 120px; /* Batas tinggi textarea */
+  line-height: 1.5;
+  color: var(--text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-@media (min-width: 768px) {
-  .inputTextarea {
-    font-size: 1rem;
-    min-height: 48px;
-  }
+
+.inputTextArea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
 }
-.inputTextarea::placeholder {
-  color: #94a3b8; /* slate-400 */
+
+.inputTextArea:focus {
+  border-color: var(--brand-blue-DEFAULT);
+  box-shadow: 0 0 0 3px var(--ring-color-focus);
 }
-.inputTextarea:focus {
-  border-color: #6366f1; /* indigo-500 */
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); /* ring-indigo-500 (warna disesuaikan) */
-}
-.inputTextarea:disabled {
-  background-color: #f1f5f9; /* slate-100 */
+
+.inputTextArea:disabled {
+  background-color: var(--surface-input-disabled);
   cursor: not-allowed;
   opacity: 0.7;
 }
 
-.sendButton {
-  padding: 0.75rem;
-  background-image: linear-gradient(to bottom right, #3b82f6, #6366f1); /* blue-500 to indigo-600 */
-  border-radius: 0.75rem; /* rounded-xl (dulu 0.5rem) */
-  color: white;
-  font-weight: 600;
-  transition-property: all;
-  transition-duration: 150ms;
-  box-shadow: 0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px -1px rgba(0,0,0,.1);
+@media (min-width: 768px) {
+  .inputTextArea {
+    min-height: 46px;
+    font-size: 0.925rem; /* Sedikit lebih besar di desktop */
+  }
+}
+
+/* Tombol Mikrofon & Kirim */
+.iconButton { /* Base untuk tombol ikon */
+  padding: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   flex-shrink: 0;
-  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
+  box-shadow: var(--shadow-xs);
 }
-.sendButton svg {
-  width: 20px;
-  height: 20px;
+.iconButton:focus-visible {
+  outline: none;
+  border-color: var(--brand-blue-DEFAULT);
+  box-shadow: 0 0 0 3px var(--ring-color-focus);
 }
-.sendButton:hover:not(:disabled) {
-  background-image: linear-gradient(to bottom right, #2563eb, #4f46e5); /* blue-600 to indigo-700 */
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
-}
-.sendButton:active:not(:disabled) {
-  transform: scale(0.95);
-  box-shadow: inset 0 1px 2px 0 rgba(0,0,0,0.05);
-}
-.sendButton:disabled {
-  opacity: 0.5; /* Lebih terlihat disable */
+.iconButton[disabled] {
+  opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
+}
+.iconButton:not([disabled]):active {
+  transform: scale(0.94);
+}
+@media (min-width: 768px) {
+  .iconButton {
+    width: 46px;
+    height: 46px;
+  }
 }
 
-@media (min-width: 768px) {
-  .sendButton { height: 48px; }
+.micButtonIdle {
+  composes: iconButton;
+  background-color: var(--surface-input);
+  color: var(--text-secondary);
+  border: 1.5px solid var(--border-medium);
+}
+.micButtonIdle:hover:not([disabled]) {
+  background-color: #f1f5f9; /* slate-100 */
+  border-color: var(--border-dark);
+  color: var(--text-primary);
+}
+
+.micButtonListening {
+  composes: iconButton;
+  background-color: var(--danger-DEFAULT);
+  color: var(--text-on-primary-brand);
+  border-color: var(--danger-dark);
+  box-shadow: 0 0 8px 1px var(--ring-color-danger-focus), var(--shadow-sm);
+}
+.micButtonListening:hover:not([disabled]) {
+  background-color: var(--danger-dark);
+}
+.micButtonListening:focus-visible {
+  border-color: var(--danger-dark);
+  box-shadow: 0 0 0 3px var(--ring-color-danger-focus), var(--shadow-sm);
+}
+
+.micIcon {
+  fill: currentColor;
+  transition: transform 150ms;
+  width: 1.3rem; /* 20.8px */
+  height: 1.3rem;
+}
+.micButtonListening .micIcon {
+  animation: pulseMic 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulseMic {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* Jika tombol mic menampilkan teks "Hentikan" */
+.micButtonWithText {
+  composes: iconButton; /* Mewarisi dasar iconButton */
+  width: auto; /* Agar bisa menyesuaikan dengan teks */
+  padding-left: 0.8rem;
+  padding-right: 0.8rem;
+}
+.micButtonWithText span {
+  font-weight: 500;
+  font-size: 0.875rem; /* 14px */
+}
+/* Saat listening dan ada teks */
+.micButtonWithText.micButtonListening {
+  background-color: var(--danger-DEFAULT);
+  color: var(--text-on-primary-brand);
+  border-color: var(--danger-dark);
+}
+.micButtonWithText.micButtonListening:hover:not([disabled]) {
+  background-color: var(--danger-dark);
+}
+
+
+.sendButton {
+  composes: iconButton;
+  background-image: linear-gradient(to right, var(--brand-blue-DEFAULT), var(--brand-indigo-DEFAULT));
+  color: var(--text-on-primary-brand);
+  font-weight: 500;
+}
+.sendButton:hover:not([disabled]) {
+  background-image: linear-gradient(to right, var(--brand-blue-dark), var(--brand-indigo-dark));
+  box-shadow: var(--shadow-md);
+}
+.sendButton[disabled] {
+  background-image: none;
+  background-color: var(--border-medium);
+}
+.sendButton svg {
+  width: 1.2rem; /* 19.2px */
+  height: 1.2rem;
+  transition: transform 0.15s ease-out;
+}
+.sendButton:hover:not([disabled]) svg {
+  transform: scale(1.1) translateX(1px) rotate(5deg);
+}
+
+
+/* Loading Indicator (Typing...) */
+.loadingIndicatorContainer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  width: 100%;
+  justify-content: flex-start;
+}
+.loadingIndicatorAvatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-image: linear-gradient(135deg, #64748b, #475569);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-on-primary-brand);
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+}
+.loadingIndicatorBubble {
+  background-color: var(--surface-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 18px 18px 18px 6px; /* Assistant bubble shape */
+  padding: 10px 15px;
+  box-shadow: var(--shadow-md);
+}
+.loadingDots {
+  display: flex;
+  align-items: center;
+  gap: 5px; /* Jarak antar titik */
+}
+.loadingDots > div {
+  width: 8px;
+  height: 8px;
+  background-color: var(--text-muted);
+  border-radius: 50%;
+  animation: bounceDots 1.4s infinite ease-in-out both;
+}
+.loadingDots > div:nth-child(1) { animation-delay: -0.32s; }
+.loadingDots > div:nth-child(2) { animation-delay: -0.16s; }
+@keyframes bounceDots {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); }
+}
+
+/* Error Message */
+.errorMessageContainer {
+  padding: 0.75rem 1rem;
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+  border-top: 1px solid var(--danger-border);
+  font-size: 0.875rem;
+  text-align: center;
+  width: 100%;
+  /* Muncul di bawah waveform STT atau di atas input form jika waveform tidak aktif */
+  /* z-index: 30; */ /* Jika perlu diatur tumpukannya */
+}
+.errorMessageContainer strong {
+  font-weight: 600;
 }
