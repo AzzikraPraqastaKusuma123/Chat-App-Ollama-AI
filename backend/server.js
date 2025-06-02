@@ -2,42 +2,20 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // Import pustaka cors
 const ollamaImport = require('ollama');
 // const { Client } = require("@gradio/client"); // Akan diimpor dinamis jika diperlukan
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-// --- AWAL PERBAIKAN CORS ---
-// Konfigurasi CORS yang lebih spesifik dan jelas
-const allowedOrigins = [
-  'http://localhost:8080', // Ganti atau tambahkan port frontend Vite Anda jika berbeda
-  'http://localhost:5173', // Port default lain yang sering digunakan Vite
-  // Tambahkan origin lain jika perlu, misalnya URL produksi Anda nanti
-  // Contoh: 'https://aplikasichatanda.com'
-];
+// --- KONFIGURASI CORS PALING SEDERHANA ---
+// Mengizinkan permintaan dari SEMUA origin. Ini baik untuk debugging.
+// Untuk produksi, Anda sebaiknya membatasi origin yang diizinkan.
+app.use(cors());
+// --- AKHIR KONFIGURASI CORS ---
 
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Izinkan permintaan tanpa origin (seperti dari Postman, curl, atau aplikasi mobile)
-    // Atau jika origin ada dalam daftar yang diizinkan
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-  allowedHeaders: ['Content-Type', 'Authorization'], // Pastikan Content-Type diizinkan
-  credentials: true, // Penting jika Anda berencana menggunakan cookies atau sesi
-  optionsSuccessStatus: 200 // Beberapa browser lama (IE11, berbagai SmartTVs) bermasalah dengan 204
-};
-
-app.use(cors(corsOptions));
-// --- AKHIR PERBAIKAN CORS ---
-
-app.use(express.json());
+app.use(express.json()); // Middleware untuk mem-parsing body JSON
 
 const HF_TOKEN = process.env.HF_TOKEN;
 const ollama = ollamaImport.default;
@@ -82,7 +60,7 @@ function formatMessagesForLlama3(messagesArray, systemMessage = "Anda adalah asi
 async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength) {
     const translatedParts = [];
     let remainingText = text;
-    if (text.length > maxChunkLength) { // Hanya log jika memang panjang
+    if (text.length > maxChunkLength) {
         console.log(`Menerjemahkan teks panjang (${text.length} chars) dalam beberapa bagian...`);
     }
 
@@ -129,7 +107,7 @@ async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength)
             translatedParts.push(chunkToSend); 
         }
     }
-    if (text.length > maxChunkLength) { // Hanya log jika memang panjang
+    if (text.length > maxChunkLength) {
         console.log("Semua bagian selesai diproses.");
     }
     return translatedParts.join(" ").trim(); 
@@ -172,7 +150,7 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
 
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    const ollamaModel = req.body.model || "tinyllama"; // Default ke tinyllama jika tidak ada model yang dikirim
+    const ollamaModel = req.body.model || "tinyllama";
     const OLLAMA_TIMEOUT = 10000; 
     const HF_ZEPHYR_TIMEOUT = 25000; 
     const HF_LLAMA3_TIMEOUT = 45000;  
@@ -291,7 +269,6 @@ app.post('/api/chat', async (req, res) => {
 
 app.get('/', (req, res) => { res.send('Chat backend siap!'); });
 
-// Tambahkan penanganan error global untuk menangkap error yang tidak tertangani
 app.use((err, req, res, next) => {
   console.error("Terjadi error tidak tertangani:", err.stack);
   res.status(500).send('Terjadi kesalahan pada server!');
