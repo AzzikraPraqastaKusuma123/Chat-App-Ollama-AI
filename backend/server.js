@@ -155,7 +155,7 @@ app.post('/api/chat', async (req, res) => {
 
     const OLLAMA_TIMEOUT = 10000;
     const HF_ZEPHYR_TIMEOUT = 25000;
-    const HF_LLAMA3_TIMEOUT = 45000;
+    const HF_LLAMA3_TIMEOUT = 45000; // Anda bisa menaikkan ini jika curiga timeout, tapi 404 bukan karena ini.
 
     let rawReplyContent = "";
     let respondedBy = "";
@@ -246,9 +246,8 @@ app.post('/api/chat', async (req, res) => {
             console.warn(`Gagal dari HF (Zephyr): ${zephyrError.message}`);
             lastError = zephyrError;
         }
-    } else if (!attemptSuccessful && !HF_TOKEN_ZEPHYR) { // Hanya log jika Zephyr tidak dicoba KARENA tokennya tidak ada
-        console.log("HF_TOKEN_ZEPHYR tidak tersedia (atau Llama 3 sudah sukses), melewati percobaan model Zephyr.");
-        // Hanya set error jika belum ada error sebelumnya dari Llama3 (misal Llama3 token juga tidak ada)
+    } else if (!attemptSuccessful && !HF_TOKEN_ZEPHYR) { 
+        console.log("HF_TOKEN_ZEPHYR tidak tersedia (atau Llama 3 sudah sukses/tokennya tidak ada), melewati percobaan model Zephyr.");
         if (!lastError && !HF_TOKEN_LLAMA3) lastError = new Error("HF_TOKEN_ZEPHYR tidak tersedia untuk model Zephyr.");
     }
 
