@@ -11,60 +11,40 @@ const port = process.env.PORT || 3001;
 // Middleware untuk logging semua permintaan masuk
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] Menerima permintaan: ${req.method} ${req.url} dari Origin: ${req.headers.origin}`);
-  console.log(`   Request Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  // Hapus log Request Headers yang panjang untuk menjaga kebersihan log, kecuali jika benar-benar dibutuhkan untuk debugging spesifik
+  // console.log(`   Request Headers: ${JSON.stringify(req.headers, null, 2)}`); 
   next();
 });
 
-// --- KONFIGURASI CORS SANGAT PERMISIF UNTUK DEBUGGING ---
+// --- KONFIGURASI CORS YANG DISEMPURNAKAN ---
 const corsOptions = {
   origin: (origin, callback) => {
-    // Izinkan semua origin untuk debugging.
+    // Untuk debugging, izinkan semua origin.
     // PERINGATAN: Untuk produksi, Anda HARUS membatasi ini ke domain frontend Anda yang sebenarnya.
-    console.log(`   CORS Middleware (cors package): Memeriksa origin: ${origin}`);
-    // Untuk localhost, origin mungkin tidak selalu ada, jadi kita izinkan jika tidak ada origin atau jika ada.
-    callback(null, true);
+    // Contoh: const allowedOrigins = ['http://localhost:8080', 'https://domainanda.com'];
+    // if (allowedOrigins.includes(origin) || !origin) { // Izinkan juga jika tidak ada origin (mis. Postman)
+    //   callback(null, true);
+    // } else {
+    //   callback(new Error('Not allowed by CORS'));
+    // }
+    console.log(`   CORS Middleware: Memeriksa origin: ${origin}`);
+    callback(null, true); // Izinkan semua untuk debugging saat ini
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   credentials: true,
-  preflightContinue: false, // Penting: pastikan middleware CORS menangani OPTIONS dan tidak meneruskannya
-  optionsSuccessStatus: 200 // Beberapa browser memerlukan status 200 OK untuk OPTIONS
+  optionsSuccessStatus: 204 // Standar untuk preflight adalah 204 No Content
+                           // Beberapa implementasi menggunakan 200, tapi 204 lebih umum.
+                           // Jika masih bermasalah, bisa coba ganti ke 200.
 };
 
-// 1. Tangani permintaan OPTIONS secara eksplisit untuk SEMUA rute *SEBELUM* rute lain.
-// Ini penting untuk memastikan permintaan preflight CORS ditangani dengan benar.
-app.options('*', cors(corsOptions), (req, res, next) => {
-  // Middleware cors(corsOptions) seharusnya sudah mengatur header yang benar.
-  // Kita hanya perlu memastikan respons dikirim dengan benar.
-  console.log(`   Menangani permintaan OPTIONS untuk: ${req.url} dengan cors package`);
-  // Tidak perlu next() di sini karena kita ingin mengakhiri respons untuk OPTIONS
-  res.sendStatus(200); // atau res.status(204).send();
-});
+// 1. Tangani permintaan OPTIONS untuk SEMUA rute *SEBELUM* rute lain.
+// Middleware `cors(corsOptions)` akan menangani pengiriman header yang benar
+// dan mengakhiri permintaan dengan status `optionsSuccessStatus`.
+app.options('*', cors(corsOptions));
 
-// 2. Terapkan middleware CORS untuk SEMUA rute lainnya.
+// 2. Terapkan middleware CORS untuk SEMUA rute lainnya (GET, POST, dll.).
 app.use(cors(corsOptions));
-
-// 3. Middleware tambahan untuk memastikan header CORS ada (belt and suspenders)
-// Ini mungkin redundan jika `cors()` bekerja dengan benar, tapi untuk debugging.
-// Ditempatkan SETELAH cors() utama agar tidak bentrok jika cors() sudah benar.
-app.use((req, res, next) => {
-  const requestOrigin = req.headers.origin || '*'; // Gunakan origin permintaan jika ada, atau '*'
-  if (!res.headersSent) { // Hanya set header jika belum ada yang dikirim
-    res.setHeader('Access-Control-Allow-Origin', requestOrigin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    console.log(`   Middleware manual CORS: Header diatur untuk origin: ${requestOrigin}`);
-  }
-
-  // Jika ini adalah permintaan OPTIONS yang belum ditangani (seharusnya sudah oleh app.options('*', ...))
-  // ini sebagai fallback tambahan.
-  if (req.method === 'OPTIONS' && !res.headersSent) {
-    console.log('   Middleware manual CORS: Menangani permintaan OPTIONS (fallback).');
-    return res.sendStatus(200);
-  }
-  next();
-});
 // --- AKHIR KONFIGURASI CORS ---
 
 app.use(express.json()); // Middleware untuk mem-parsing body JSON
