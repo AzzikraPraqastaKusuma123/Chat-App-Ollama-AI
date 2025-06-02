@@ -3,19 +3,19 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: var(--background-app);
-  font-family: var(--primary-font);
+  background-color: var(--background-app, #f7f9fc); 
+  font-family: var(--primary-font, 'Inter', sans-serif);
   overflow: hidden;
 }
 
 .appHeader {
-  background-image: linear-gradient(to right, var(--brand-blue-DEFAULT), var(--brand-indigo-DEFAULT), var(--brand-purple-DEFAULT));
-  box-shadow: var(--shadow-md);
-  padding: 0.9rem 1.5rem;
+  background-image: linear-gradient(to right, var(--brand-blue-DEFAULT, #2563eb), var(--brand-indigo-DEFAULT, #4f46e5), var(--brand-purple-DEFAULT, #7c3aed));
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06));
+  padding: 1rem 1.5rem; 
   position: sticky;
   top: 0;
   z-index: 100;
-  color: var(--text-on-primary-brand);
+  color: var(--text-on-primary-brand, #ffffff);
   text-align: center;
 }
 
@@ -36,8 +36,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 40px; /* Beri ruang meski waveform belum aktif penuh */
-  padding-top: 4px;
+  min-height: 60px; 
+  padding-top: 8px; 
+  padding-bottom: 4px;
   width: 100%;
   pointer-events: none;
 }
@@ -81,7 +82,7 @@
   width: calc(100% - 2rem);
   margin-left: auto;
   margin-right: auto;
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04));
   border: 1px solid rgba(255,255,255,0.05);
   position: absolute;
   bottom: 0; 
@@ -91,8 +92,6 @@
 }
 
 .messageInputFormPaddedForWaveform {
-  /* Sesuaikan nilai padding dengan tinggi .waveformContainerRadial + sedikit margin */
-  /* Misalnya jika .waveformContainerRadial tingginya ~160px (120px canvas + 40px padding/text) */
   padding-bottom: 170px !important; 
 }
 @media (min-width: 768px) {
@@ -101,11 +100,10 @@
     }
 }
 
-
-.voiceWaveformCanvasRadial { /* Untuk STT dan TTS dari <audio> */
+.voiceWaveformCanvasRadial { 
   /* Styling mostly via props JS */
 }
-.ttsWaveformCanvas { /* Untuk RadialPulseWaveform */
+.ttsWaveformCanvas { 
  /* Styling mostly via props JS */
 }
 
@@ -119,10 +117,10 @@
 .messageInputForm {
   position: sticky;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border-light);
+  background-color: rgba(255, 255, 255, 0.85); /* Sedikit lebih solid */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border-light, #e5e7eb);
   padding: 0.75rem 1rem;
   width: 100%;
   z-index: 50;
@@ -141,63 +139,64 @@
   margin-right: auto;
   display: flex;
   align-items: flex-end;
-  gap: 0.625rem;
+  gap: 0.75rem; /* Sedikit menambah gap */
 }
 
 .inputTextArea {
   flex-grow: 1;
-  padding: 0.625rem 1rem;
-  font-size: 0.9rem;
-  font-family: var(--primary-font);
-  background-color: var(--surface-input);
-  border: 1.5px solid var(--border-medium);
-  border-radius: 10px;
+  padding: 0.8rem 1.2rem; 
+  font-size: 0.925rem; 
+  font-family: var(--primary-font, 'Inter', sans-serif);
+  background-color: var(--surface-input, #ffffff);
+  border: 1.5px solid var(--border-medium, #d1d5db);
+  border-radius: 12px; 
   outline: none;
   resize: none;
-  min-height: 44px;
-  max-height: 120px;
-  line-height: 1.5;
-  color: var(--text-primary);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 48px; 
+  max-height: 150px; 
+  line-height: 1.6; 
+  color: var(--text-primary, #1f2937);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 .inputTextArea::placeholder {
-  color: var(--text-muted);
+  color: var(--text-muted, #6b7280);
   opacity: 0.8;
 }
 .inputTextArea:focus {
-  border-color: var(--brand-blue-DEFAULT);
-  box-shadow: 0 0 0 3px var(--ring-color-focus);
+  border-color: var(--brand-blue-DEFAULT, #2563eb);
+  box-shadow: 0 0 0 3.5px var(--ring-color-focus, rgba(59,130,246,0.3)); 
+  background-color: var(--surface-card, #fff); 
 }
 .inputTextArea:disabled {
-  background-color: var(--surface-input-disabled);
+  background-color: var(--surface-input-disabled, #f3f4f6);
   cursor: not-allowed;
   opacity: 0.7;
 }
 @media (min-width: 768px) {
   .inputTextArea {
-    min-height: 46px;
-    font-size: 0.925rem;
+    min-height: 50px;
+    font-size: 0.95rem;
   }
 }
 
 .iconButton {
   padding: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 48px; 
+  height: 48px; 
+  border-radius: 12px; 
   transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid transparent;
+  border: 1.5px solid transparent; 
   cursor: pointer;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-xs, 0 1px 2px 0 rgba(0,0,0,0.05));
 }
 .iconButton:focus-visible {
   outline: none;
-  border-color: var(--brand-blue-DEFAULT);
-  box-shadow: 0 0 0 3px var(--ring-color-focus);
+  border-color: var(--brand-blue-DEFAULT, #2563eb);
+  box-shadow: 0 0 0 3.5px var(--ring-color-focus, rgba(59,130,246,0.3));
 }
 .iconButton[disabled] {
   opacity: 0.5;
@@ -205,40 +204,40 @@
   box-shadow: none;
 }
 .iconButton:not([disabled]):active {
-  transform: scale(0.94);
+  transform: scale(0.93); 
 }
 @media (min-width: 768px) {
   .iconButton {
-    width: 46px;
-    height: 46px;
+    width: 50px;
+    height: 50px;
   }
 }
 
 .micButtonIdle {
   composes: iconButton;
-  background-color: var(--surface-input);
-  color: var(--text-secondary);
-  border: 1.5px solid var(--border-medium);
+  background-color: var(--surface-input, #ffffff);
+  color: var(--text-secondary, #4b5563);
+  border: 1.5px solid var(--border-medium, #d1d5db);
 }
 .micButtonIdle:hover:not([disabled]) {
-  background-color: #f1f5f9;
-  border-color: var(--border-dark);
-  color: var(--text-primary);
+  background-color: var(--surface-hover, #f0f2f5); 
+  border-color: var(--border-dark, #9ca3af);
+  color: var(--text-primary, #1f2937);
 }
 
 .micButtonListening {
   composes: iconButton;
-  background-color: var(--danger-DEFAULT);
-  color: var(--text-on-primary-brand);
-  border-color: var(--danger-dark);
-  box-shadow: 0 0 8px 1px var(--ring-color-danger-focus), var(--shadow-sm);
+  background-color: var(--danger-DEFAULT, #ef4444);
+  color: var(--text-on-primary-brand, #ffffff);
+  border-color: var(--danger-dark, #dc2626);
+  box-shadow: 0 0 8px 1px var(--ring-color-danger-focus, rgba(239,68,68,0.4)), var(--shadow-sm, 0 1px 2px 0 rgba(0,0,0,0.05));
 }
 .micButtonListening:hover:not([disabled]) {
-  background-color: var(--danger-dark);
+  background-color: var(--danger-dark, #dc2626);
 }
 .micButtonListening:focus-visible {
-  border-color: var(--danger-dark);
-  box-shadow: 0 0 0 3px var(--ring-color-danger-focus), var(--shadow-sm);
+  border-color: var(--danger-dark, #dc2626);
+  box-shadow: 0 0 0 3.5px var(--ring-color-danger-focus, rgba(239,68,68,0.4)), var(--shadow-sm, 0 1px 2px 0 rgba(0,0,0,0.05));
 }
 
 .micIcon {
@@ -255,7 +254,7 @@
   50% { opacity: 0.7; transform: scale(1.1); }
 }
 
-.micButtonWithText { /* Diterapkan bersama .iconButton dan .micButtonListening */
+.micButtonWithText { 
   width: auto; 
   padding-left: 0.8rem;
   padding-right: 0.8rem;
@@ -267,17 +266,18 @@
 
 .sendButton {
   composes: iconButton;
-  background-image: linear-gradient(to right, var(--brand-blue-DEFAULT), var(--brand-indigo-DEFAULT));
-  color: var(--text-on-primary-brand);
+  background-image: linear-gradient(to right, var(--brand-blue-DEFAULT, #2563eb), var(--brand-indigo-DEFAULT, #4f46e5));
+  color: var(--text-on-primary-brand, #ffffff);
   font-weight: 500;
+  border: none; 
 }
 .sendButton:hover:not([disabled]) {
-  background-image: linear-gradient(to right, var(--brand-blue-dark), var(--brand-indigo-dark));
-  box-shadow: var(--shadow-md);
+  background-image: linear-gradient(to right, var(--brand-blue-dark, #1d4ed8), var(--brand-indigo-dark, #3730a3));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); 
 }
 .sendButton[disabled] {
   background-image: none;
-  background-color: var(--border-medium);
+  background-color: var(--border-medium, #d1d5db);
 }
 .sendButton svg {
   width: 1.2rem;
@@ -293,31 +293,31 @@
   align-items: flex-end;
   gap: 10px;
   margin-top: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 16px; /* Disesuaikan dengan margin-bottom .messageWrapper */
   width: 100%;
   justify-content: flex-start;
 }
 .loadingIndicatorAvatar {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 40px; /* Sama dengan avatar biasa */
+  height: 40px; /* Sama dengan avatar biasa */
   border-radius: 50%;
-  background-image: linear-gradient(135deg, #64748b, #475569);
+  background-image: linear-gradient(135deg, #64748b, #4b5563); /* Sama dengan avatar assistant */
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-on-primary-brand);
-  font-size: 0.9rem;
-  font-weight: 500;
-  box-shadow: var(--shadow-sm);
+  color: var(--text-on-primary-brand, #ffffff);
+  font-size: 1rem;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); /* Sama dengan avatar biasa */
 }
 .loadingIndicatorBubble {
-  background-color: var(--surface-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border-light);
-  border-radius: 18px 18px 18px 6px;
-  padding: 10px 15px;
-  box-shadow: var(--shadow-md);
+  background-color: var(--surface-card, #ffffff);
+  color: var(--text-primary, #1f2937);
+  border: 1px solid var(--border-ultralight, #f0f2f5); /* Sama dengan bubble assistant */
+  border-radius: 22px 22px 22px 8px; /* Sama dengan bubble assistant */
+  padding: 12px 18px; /* Sama dengan bubble biasa */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0,0,0,0.04); /* Sama dengan bubble biasa */
 }
 .loadingDots {
   display: flex;
@@ -327,7 +327,7 @@
 .loadingDots > div {
   width: 8px;
   height: 8px;
-  background-color: var(--text-muted);
+  background-color: var(--text-muted, #6b7280);
   border-radius: 50%;
   animation: bounceDots 1.4s infinite ease-in-out both;
 }
@@ -340,15 +340,18 @@
 
 .errorMessageContainer {
   padding: 0.75rem 1rem;
-  background-color: var(--danger-bg);
-  color: var(--danger-text);
-  border-top: 1px solid var(--danger-border);
+  background-color: var(--danger-bg, #fee2e2);
+  color: var(--danger-text, #b91c1c);
+  border-top: 1px solid var(--danger-border, #fecaca);
   font-size: 0.875rem;
   text-align: center;
   width: 100%;
-  position: sticky; /* Agar tetap terlihat di atas form jika error muncul saat scroll */
-  bottom: 0; /* Akan tertutup oleh form input, jadi Z-index penting */
-  z-index: 40; /* Di bawah form input, di atas waveform STT jika form transparan */
+  position: sticky; 
+  bottom: 0; 
+  z-index: 40; 
 }
-/* Jika form input punya background solid, error bisa di atasnya atau di bawahnya (z-index) */
-/* Atau, error message bisa jadi bagian dari .mainContent sebelum form, agar ikut scroll */
+
+/* Utility Classes, jika ada yang Anda tambahkan */
+.hiddenAudioPlayer {
+  display: none;
+}
