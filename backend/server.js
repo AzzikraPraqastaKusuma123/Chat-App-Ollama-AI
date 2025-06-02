@@ -11,39 +11,26 @@ const port = process.env.PORT || 3001;
 // Middleware untuk logging semua permintaan masuk
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] Menerima permintaan: ${req.method} ${req.url} dari Origin: ${req.headers.origin}`);
-  // Hapus log Request Headers yang panjang untuk menjaga kebersihan log, kecuali jika benar-benar dibutuhkan untuk debugging spesifik
-  // console.log(`   Request Headers: ${JSON.stringify(req.headers, null, 2)}`); 
   next();
 });
 
-// --- KONFIGURASI CORS YANG DISEMPURNAKAN ---
+// --- KONFIGURASI CORS YANG DISEMPURNAKAN DAN DISEMPURNAKAN ---
 const corsOptions = {
   origin: (origin, callback) => {
     // Untuk debugging, izinkan semua origin.
     // PERINGATAN: Untuk produksi, Anda HARUS membatasi ini ke domain frontend Anda yang sebenarnya.
-    // Contoh: const allowedOrigins = ['http://localhost:8080', 'https://domainanda.com'];
-    // if (allowedOrigins.includes(origin) || !origin) { // Izinkan juga jika tidak ada origin (mis. Postman)
-    //   callback(null, true);
-    // } else {
-    //   callback(new Error('Not allowed by CORS'));
-    // }
     console.log(`   CORS Middleware: Memeriksa origin: ${origin}`);
     callback(null, true); // Izinkan semua untuk debugging saat ini
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   credentials: true,
-  optionsSuccessStatus: 204 // Standar untuk preflight adalah 204 No Content
-                           // Beberapa implementasi menggunakan 200, tapi 204 lebih umum.
-                           // Jika masih bermasalah, bisa coba ganti ke 200.
+  optionsSuccessStatus: 204 // Standar untuk preflight adalah 204 No Content.
+                           // Middleware `cors` akan menangani respons untuk permintaan OPTIONS.
 };
 
-// 1. Tangani permintaan OPTIONS untuk SEMUA rute *SEBELUM* rute lain.
-// Middleware `cors(corsOptions)` akan menangani pengiriman header yang benar
-// dan mengakhiri permintaan dengan status `optionsSuccessStatus`.
-app.options('*', cors(corsOptions));
-
-// 2. Terapkan middleware CORS untuk SEMUA rute lainnya (GET, POST, dll.).
+// Terapkan middleware CORS untuk SEMUA rute dan SEMUA metode (termasuk OPTIONS).
+// Pustaka `cors` akan secara otomatis menangani permintaan preflight OPTIONS.
 app.use(cors(corsOptions));
 // --- AKHIR KONFIGURASI CORS ---
 
