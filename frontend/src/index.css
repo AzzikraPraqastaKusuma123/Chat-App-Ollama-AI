@@ -6,22 +6,22 @@
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 
   --background-light: #f8fafc; /* Tailwind slate-50 */
-  --background-app: #f1f5f9; /* Tailwind slate-100, untuk latar utama aplikasi jika beda dari body */
+  --background-app: #f1f5f9; /* Tailwind slate-100 */
   
   --text-primary: #1e293b;    /* Tailwind slate-800 */
   --text-secondary: #475569; /* Tailwind slate-600 */
   --text-muted: #64748b;     /* Tailwind slate-500 */
-  --text-on-primary-brand: #ffffff; /* Teks di atas warna brand utama */
+  --text-on-primary-brand: #ffffff;
 
-  --brand-blue-light: #60a5fa; /* Tailwind blue-400 */
-  --brand-blue-DEFAULT: #3b82f6; /* Tailwind blue-500 */
-  --brand-blue-dark: #2563eb;  /* Tailwind blue-600 */
+  --brand-blue-light: #60a5fa;
+  --brand-blue-DEFAULT: #3b82f6;
+  --brand-blue-dark: #2563eb;  
   
-  --brand-indigo-light: #818cf8; /* Tailwind indigo-400 */
-  --brand-indigo-DEFAULT: #6366f1; /* Tailwind indigo-500 */
-  --brand-indigo-dark: #4f46e5;  /* Tailwind indigo-600 */
+  --brand-indigo-light: #818cf8;
+  --brand-indigo-DEFAULT: #6366f1;
+  --brand-indigo-dark: #4f46e5; 
 
-  --brand-purple-DEFAULT: #8b5cf6; /* Tailwind purple-500 */
+  --brand-purple-DEFAULT: #8b5cf6;
 
   --border-light: #e2e8f0; /* Tailwind slate-200 */
   --border-medium: #cbd5e1; /* Tailwind slate-300 */
@@ -29,14 +29,13 @@
 
   --surface-card: #ffffff;
   --surface-input: #ffffff;
-  --surface-input-disabled: #f3f4f6; /* Tailwind gray-100 */
+  --surface-input-disabled: #f3f4f6;
 
-  --danger-bg: #fee2e2; /* Tailwind red-100 */
-  --danger-text: #b91c1c; /* Tailwind red-700 */
-  --danger-border: #fecaca; /* Tailwind red-200 */
-  --danger-DEFAULT: #ef4444; /* Tailwind red-500 */
-  --danger-dark: #dc2626; /* Tailwind red-600 */
-
+  --danger-bg: #fee2e2;
+  --danger-text: #b91c1c;
+  --danger-border: #fecaca;
+  --danger-DEFAULT: #ef4444;
+  --danger-dark: #dc2626;
 
   --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
   --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
@@ -44,7 +43,7 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
 
-  --ring-color-focus: rgba(59, 130, 246, 0.4); /* blue-500 with opacity */
+  --ring-color-focus: rgba(59, 130, 246, 0.4);
   --ring-color-danger-focus: rgba(239, 68, 68, 0.4);
 }
 
@@ -62,13 +61,12 @@ body {
   box-sizing: border-box;
 }
 
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(0,0,0,0.02); /* Lebih subtle */
+  background: rgba(0,0,0,0.02);
   border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb {
