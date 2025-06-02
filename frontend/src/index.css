@@ -1,26 +1,82 @@
 /* frontend/src/index.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+:root {
+  --primary-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+
+  --background-light: #f8fafc; /* Tailwind slate-50 */
+  --background-app: #f1f5f9; /* Tailwind slate-100, untuk latar utama aplikasi jika beda dari body */
+  
+  --text-primary: #1e293b;    /* Tailwind slate-800 */
+  --text-secondary: #475569; /* Tailwind slate-600 */
+  --text-muted: #64748b;     /* Tailwind slate-500 */
+  --text-on-primary-brand: #ffffff; /* Teks di atas warna brand utama */
+
+  --brand-blue-light: #60a5fa; /* Tailwind blue-400 */
+  --brand-blue-DEFAULT: #3b82f6; /* Tailwind blue-500 */
+  --brand-blue-dark: #2563eb;  /* Tailwind blue-600 */
+  
+  --brand-indigo-light: #818cf8; /* Tailwind indigo-400 */
+  --brand-indigo-DEFAULT: #6366f1; /* Tailwind indigo-500 */
+  --brand-indigo-dark: #4f46e5;  /* Tailwind indigo-600 */
+
+  --brand-purple-DEFAULT: #8b5cf6; /* Tailwind purple-500 */
+
+  --border-light: #e2e8f0; /* Tailwind slate-200 */
+  --border-medium: #cbd5e1; /* Tailwind slate-300 */
+  --border-dark: #94a3b8;   /* Tailwind slate-400 */
+
+  --surface-card: #ffffff;
+  --surface-input: #ffffff;
+  --surface-input-disabled: #f3f4f6; /* Tailwind gray-100 */
+
+  --danger-bg: #fee2e2; /* Tailwind red-100 */
+  --danger-text: #b91c1c; /* Tailwind red-700 */
+  --danger-border: #fecaca; /* Tailwind red-200 */
+  --danger-DEFAULT: #ef4444; /* Tailwind red-500 */
+  --danger-dark: #dc2626; /* Tailwind red-600 */
+
+
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+
+  --ring-color-focus: rgba(59, 130, 246, 0.4); /* blue-500 with opacity */
+  --ring-color-danger-focus: rgba(239, 68, 68, 0.4);
+}
+
 body {
-  font-family: 'Inter', sans-serif;
+  margin: 0;
+  font-family: var(--primary-font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f8fafc; /* Contoh bg-slate-100 atau bg-gray-50 */
-  margin: 0; /* Reset margin default browser */
-  color: #334155; /* Contoh warna teks default (slate-700) */
+  background-color: var(--background-light);
+  color: var(--text-primary);
+  line-height: 1.6;
 }
 
-html {
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-}
-
-/* Custom scrollbar (opsional) */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #f1f5f9; /* slate-100 */ }
-::-webkit-scrollbar-thumb { background: #cbd5e1; /* slate-300 */ border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; /* slate-500 */ }
-
-/* Anda mungkin ingin menambahkan beberapa reset dasar atau normalisasi di sini jika perlu */
 * {
   box-sizing: border-box;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.02); /* Lebih subtle */
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-medium);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border-dark);
 }
