@@ -4,23 +4,39 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const ollamaImport = require('ollama');
+// const { Client } = require("@gradio/client"); // Akan diimpor dinamis jika diperlukan
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Konfigurasi CORS yang lebih spesifik
+// --- AWAL PERBAIKAN CORS ---
+// Konfigurasi CORS yang lebih spesifik dan jelas
+const allowedOrigins = [
+  'http://localhost:8080', // Ganti atau tambahkan port frontend Vite Anda jika berbeda
+  'http://localhost:5173', // Port default lain yang sering digunakan Vite
+  // Tambahkan origin lain jika perlu, misalnya URL produksi Anda nanti
+  // Contoh: 'https://aplikasichatanda.com'
+];
+
 const corsOptions = {
-  origin: [
-    'http://localhost:8080', // Ganti dengan port frontend Vite Anda jika berbeda
-    'http://localhost:5173', // Port default Vite lainnya
-    // Tambahkan origin lain jika perlu (misalnya, URL produksi Anda)
-  ],
+  origin: function (origin, callback) {
+    // Izinkan permintaan tanpa origin (seperti dari Postman, curl, atau aplikasi mobile)
+    // Atau jika origin ada dalam daftar yang diizinkan
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true, // Jika Anda menggunakan cookies atau authorization headers
+  allowedHeaders: ['Content-Type', 'Authorization'], // Pastikan Content-Type diizinkan
+  credentials: true, // Penting jika Anda berencana menggunakan cookies atau sesi
+  optionsSuccessStatus: 200 // Beberapa browser lama (IE11, berbagai SmartTVs) bermasalah dengan 204
 };
 
 app.use(cors(corsOptions));
+// --- AKHIR PERBAIKAN CORS ---
+
 app.use(express.json());
 
 const HF_TOKEN = process.env.HF_TOKEN;
@@ -66,7 +82,9 @@ function formatMessagesForLlama3(messagesArray, systemMessage = "Anda adalah asi
 async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength) {
     const translatedParts = [];
     let remainingText = text;
-    console.log(`Menerjemahkan teks panjang (${text.length} chars) dalam beberapa bagian...`);
+    if (text.length > maxChunkLength) { // Hanya log jika memang panjang
+        console.log(`Menerjemahkan teks panjang (${text.length} chars) dalam beberapa bagian...`);
+    }
 
     while (remainingText.length > 0) {
         let chunkToSend;
@@ -89,7 +107,8 @@ async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength)
             const response = await fetch(myMemoryUrl);
 
             if (!response.ok) {
-                console.warn(`MyMemory API error untuk bagian: ${response.status} ${response.statusText}. Bagian asli dipertahankan.`);
+                const errorText = await response.text();
+                console.warn(`MyMemory API error untuk bagian: ${response.status} ${response.statusText} - ${errorText}. Bagian asli dipertahankan.`);
                 translatedParts.push(chunkToSend); 
                 continue;
             }
@@ -110,7 +129,9 @@ async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength)
             translatedParts.push(chunkToSend); 
         }
     }
-    console.log("Semua bagian selesai diproses.");
+    if (text.length > maxChunkLength) { // Hanya log jika memang panjang
+        console.log("Semua bagian selesai diproses.");
+    }
     return translatedParts.join(" ").trim(); 
 }
 
@@ -151,7 +172,7 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
 
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    const ollamaModel = req.body.model || "tinyllama";
+    const ollamaModel = req.body.model || "tinyllama"; // Default ke tinyllama jika tidak ada model yang dikirim
     const OLLAMA_TIMEOUT = 10000; 
     const HF_ZEPHYR_TIMEOUT = 25000; 
     const HF_LLAMA3_TIMEOUT = 45000;  
@@ -269,4 +290,11 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.get('/', (req, res) => { res.send('Chat backend siap!'); });
+
+// Tambahkan penanganan error global untuk menangkap error yang tidak tertangani
+app.use((err, req, res, next) => {
+  console.error("Terjadi error tidak tertangani:", err.stack);
+  res.status(500).send('Terjadi kesalahan pada server!');
+});
+
 app.listen(port, '0.0.0.0', () => { console.log(`Backend listening di port ${port}`); });
