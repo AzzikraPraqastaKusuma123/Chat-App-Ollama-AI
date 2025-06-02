@@ -4,12 +4,23 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const ollamaImport = require('ollama');
-// const { Client } = require("@gradio/client"); // Akan diimpor dinamis
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors());
+// Konfigurasi CORS yang lebih spesifik
+const corsOptions = {
+  origin: [
+    'http://localhost:8080', // Ganti dengan port frontend Vite Anda jika berbeda
+    'http://localhost:5173', // Port default Vite lainnya
+    // Tambahkan origin lain jika perlu (misalnya, URL produksi Anda)
+  ],
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true, // Jika Anda menggunakan cookies atau authorization headers
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const HF_TOKEN = process.env.HF_TOKEN;
@@ -25,7 +36,6 @@ function createTimeoutPromise(ms, errorMessage = 'Operasi melebihi batas waktu')
     return new Promise((_, reject) => setTimeout(() => reject(new Error(errorMessage)), ms));
 }
 
-// !!! WAJIB VERIFIKASI TEMPLATE INI DENGAN DOKUMENTASI ZEPHYR-7B-BETA DI HUGGING FACE HUB !!!
 function formatMessagesForZephyr(messagesArray) {
     const relevantMessages = messagesArray.slice(-5);
     let promptString = "<|system|>\nAnda adalah asisten AI yang membantu dan ramah. Jawablah dengan jelas.</s>\n";
@@ -38,7 +48,6 @@ function formatMessagesForZephyr(messagesArray) {
     return promptString;
 }
 
-// !!! WAJIB VERIFIKASI TEMPLATE INI DENGAN DOKUMENTASI LLAMA-3-8B-INSTRUCT DI HUGGING FACE HUB !!!
 function formatMessagesForLlama3(messagesArray, systemMessage = "Anda adalah asisten AI yang membantu dan ramah. Jawablah dengan jelas dalam Bahasa Indonesia.") {
     const relevantMessages = messagesArray.slice(-5);
     let promptString = "<|begin_of_text|>";
@@ -65,25 +74,23 @@ async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength)
             chunkToSend = remainingText;
             remainingText = "";
         } else {
-            // Coba pecah pada spasi terakhir dalam batas maxChunkLength
             let splitPoint = remainingText.lastIndexOf(' ', maxChunkLength);
-            if (splitPoint === -1 || splitPoint === 0) { // Jika tidak ada spasi atau spasi di awal, paksa pecah
+            if (splitPoint === -1 || splitPoint === 0) { 
                 splitPoint = maxChunkLength;
             }
             chunkToSend = remainingText.substring(0, splitPoint);
-            remainingText = remainingText.substring(splitPoint).trimStart(); // trimStart untuk hapus spasi di awal chunk berikutnya
+            remainingText = remainingText.substring(splitPoint).trimStart(); 
         }
 
         if (chunkToSend.trim() === '') continue;
 
         try {
-            // console.log(`Menerjemahkan bagian: "${chunkToSend.substring(0, 50)}..." (panjang: ${chunkToSend.length})`);
             const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunkToSend)}&langpair=${sourceLang}|${targetLang}`;
             const response = await fetch(myMemoryUrl);
 
             if (!response.ok) {
                 console.warn(`MyMemory API error untuk bagian: ${response.status} ${response.statusText}. Bagian asli dipertahankan.`);
-                translatedParts.push(chunkToSend); // Pertahankan bagian asli jika ada error API
+                translatedParts.push(chunkToSend); 
                 continue;
             }
             const data = await response.json();
@@ -92,34 +99,32 @@ async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength)
 
             if (translatedChunk && typeof translatedChunk === 'string' && !translatedChunk.toUpperCase().includes("QUERY LENGTH LIMIT EXCEEDED") && !translatedChunk.toUpperCase().includes("INVALID")) {
                 translatedParts.push(translatedChunk);
-            } else if (data.matches?.[0]?.translation) { // Fallback ke matches jika ada
+            } else if (data.matches?.[0]?.translation) { 
                  translatedParts.push(data.matches[0].translation);
             } else {
                 console.warn(`MyMemory tidak mengembalikan terjemahan valid untuk bagian: ${detailError || JSON.stringify(data)}. Bagian asli dipertahankan.`);
-                translatedParts.push(chunkToSend); // Pertahankan bagian asli jika terjemahan tidak valid
+                translatedParts.push(chunkToSend); 
             }
         } catch (chunkError) {
             console.error(`Error saat menerjemahkan bagian: ${chunkError.message}. Bagian asli dipertahankan.`);
-            translatedParts.push(chunkToSend); // Pertahankan bagian asli jika ada exception
+            translatedParts.push(chunkToSend); 
         }
     }
     console.log("Semua bagian selesai diproses.");
-    return translatedParts.join(" ").trim(); // Gabungkan dengan spasi
+    return translatedParts.join(" ").trim(); 
 }
 
 async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', targetLang = 'id') {
     if (!textToTranslate || typeof textToTranslate !== 'string' || textToTranslate.trim() === '') return textToTranslate;
 
-    const MAX_CHARS_MYMEMORY_FREE = 480; // Batas aman sedikit di bawah 500 karakter
+    const MAX_CHARS_MYMEMORY_FREE = 480; 
 
     if (textToTranslate.length <= MAX_CHARS_MYMEMORY_FREE) {
-        // Logika untuk teks pendek (permintaan tunggal)
         try {
-            // console.log(`Menerjemahkan teks (permintaan tunggal): "${textToTranslate.substring(0, 50)}..."`);
             const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=${sourceLang}|${targetLang}`;
             const response = await fetch(myMemoryUrl);
             if (!response.ok) {
-                 const errorText = await response.text(); // Coba dapatkan detail error jika ada
+                 const errorText = await response.text(); 
                  throw new Error(`MyMemory API error: ${response.status} ${response.statusText} - ${errorText}`);
             }
             const data = await response.json();
@@ -128,18 +133,17 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
 
             if (translatedText && typeof translatedText === 'string' && !translatedText.toUpperCase().includes("QUERY LENGTH LIMIT EXCEEDED") && !translatedText.toUpperCase().includes("INVALID")) {
                 return translatedText;
-            } else if (data.matches?.[0]?.translation) { // Fallback ke matches jika ada
+            } else if (data.matches?.[0]?.translation) { 
                 return data.matches[0].translation;
             } else {
                 console.warn(`MyMemory tidak mengembalikan terjemahan valid (permintaan tunggal): ${detailError || JSON.stringify(data)}`);
-                return textToTranslate; // Kembalikan teks asli jika terjemahan tidak valid
+                return textToTranslate; 
             }
         } catch (error) {
             console.error("Error saat menerjemahkan dengan MyMemory (permintaan tunggal):", error.message);
-            return textToTranslate; // Kembalikan teks asli jika ada error
+            return textToTranslate; 
         }
     } else {
-        // Logika untuk teks panjang (menggunakan chunking)
         return await processTextInChunks(textToTranslate, sourceLang, targetLang, MAX_CHARS_MYMEMORY_FREE);
     }
 }
@@ -148,9 +152,9 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
     const ollamaModel = req.body.model || "tinyllama";
-    const OLLAMA_TIMEOUT = 10000; // Timeout Ollama 10 detik
-    const HF_ZEPHYR_TIMEOUT = 25000; // Timeout Zephyr 25 detik (sesuaikan)
-    const HF_LLAMA3_TIMEOUT = 45000;  // Timeout Llama 3 45 detik (sesuaikan)
+    const OLLAMA_TIMEOUT = 10000; 
+    const HF_ZEPHYR_TIMEOUT = 25000; 
+    const HF_LLAMA3_TIMEOUT = 45000;  
 
     let rawReplyContent = "";
     let respondedBy = "";
@@ -242,7 +246,7 @@ app.post('/api/chat', async (req, res) => {
     if (finalReplyContent && HF_TOKEN) {
         try {
             console.log(`Mencoba Gradio TTS: "${finalReplyContent.substring(0, 50)}..."`);
-            const { Client } = await import('@gradio/client'); // Impor dinamis
+            const { Client } = await import('@gradio/client'); 
             const gradioClient = await Client.connect("NihalGazi/Text-To-Speech-Unlimited", { hf_token: HF_TOKEN });
             const ttsResult = await gradioClient.predict("/text_to_speech_app", {
                 prompt: finalReplyContent, voice: "alloy", emotion: "neutral", use_random_seed: true,
