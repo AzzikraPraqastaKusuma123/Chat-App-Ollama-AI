@@ -2,17 +2,69 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors'); // Import pustaka cors
+const cors = require('cors');
 const ollamaImport = require('ollama');
-// const { Client } = require("@gradio/client"); // Akan diimpor dinamis jika diperlukan
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-// --- KONFIGURASI CORS PALING SEDERHANA ---
-// Mengizinkan permintaan dari SEMUA origin. Ini baik untuk debugging.
-// Untuk produksi, Anda sebaiknya membatasi origin yang diizinkan.
-app.use(cors());
+// Middleware untuk logging semua permintaan masuk
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] Menerima permintaan: ${req.method} ${req.url} dari Origin: ${req.headers.origin}`);
+  console.log(`   Request Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  next();
+});
+
+// --- KONFIGURASI CORS SANGAT PERMISIF UNTUK DEBUGGING ---
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Izinkan semua origin untuk debugging.
+    // PERINGATAN: Untuk produksi, Anda HARUS membatasi ini ke domain frontend Anda yang sebenarnya.
+    console.log(`   CORS Middleware (cors package): Memeriksa origin: ${origin}`);
+    // Untuk localhost, origin mungkin tidak selalu ada, jadi kita izinkan jika tidak ada origin atau jika ada.
+    callback(null, true);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  credentials: true,
+  preflightContinue: false, // Penting: pastikan middleware CORS menangani OPTIONS dan tidak meneruskannya
+  optionsSuccessStatus: 200 // Beberapa browser memerlukan status 200 OK untuk OPTIONS
+};
+
+// 1. Tangani permintaan OPTIONS secara eksplisit untuk SEMUA rute *SEBELUM* rute lain.
+// Ini penting untuk memastikan permintaan preflight CORS ditangani dengan benar.
+app.options('*', cors(corsOptions), (req, res, next) => {
+  // Middleware cors(corsOptions) seharusnya sudah mengatur header yang benar.
+  // Kita hanya perlu memastikan respons dikirim dengan benar.
+  console.log(`   Menangani permintaan OPTIONS untuk: ${req.url} dengan cors package`);
+  // Tidak perlu next() di sini karena kita ingin mengakhiri respons untuk OPTIONS
+  res.sendStatus(200); // atau res.status(204).send();
+});
+
+// 2. Terapkan middleware CORS untuk SEMUA rute lainnya.
+app.use(cors(corsOptions));
+
+// 3. Middleware tambahan untuk memastikan header CORS ada (belt and suspenders)
+// Ini mungkin redundan jika `cors()` bekerja dengan benar, tapi untuk debugging.
+// Ditempatkan SETELAH cors() utama agar tidak bentrok jika cors() sudah benar.
+app.use((req, res, next) => {
+  const requestOrigin = req.headers.origin || '*'; // Gunakan origin permintaan jika ada, atau '*'
+  if (!res.headersSent) { // Hanya set header jika belum ada yang dikirim
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    console.log(`   Middleware manual CORS: Header diatur untuk origin: ${requestOrigin}`);
+  }
+
+  // Jika ini adalah permintaan OPTIONS yang belum ditangani (seharusnya sudah oleh app.options('*', ...))
+  // ini sebagai fallback tambahan.
+  if (req.method === 'OPTIONS' && !res.headersSent) {
+    console.log('   Middleware manual CORS: Menangani permintaan OPTIONS (fallback).');
+    return res.sendStatus(200);
+  }
+  next();
+});
 // --- AKHIR KONFIGURASI CORS ---
 
 app.use(express.json()); // Middleware untuk mem-parsing body JSON
@@ -149,6 +201,7 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
 
 
 app.post('/api/chat', async (req, res) => {
+    console.log(`   [${new Date().toISOString()}] /api/chat POST handler. Body:`, req.body ? JSON.stringify(req.body).substring(0, 100) + '...' : 'No body');
     const { messages } = req.body;
     const ollamaModel = req.body.model || "tinyllama";
     const OLLAMA_TIMEOUT = 10000; 
@@ -167,7 +220,7 @@ app.post('/api/chat', async (req, res) => {
 
     try {
         if (!ollama || typeof ollama.chat !== 'function') { throw new Error("Ollama service not ready."); }
-        console.log(`Mencoba model Ollama: ${ollamaModel} (Timeout: ${OLLAMA_TIMEOUT / 1000}s)...`);
+        console.log(`   Mencoba model Ollama: ${ollamaModel} (Timeout: ${OLLAMA_TIMEOUT / 1000}s)...`);
         const ollamaChatMessages = messages.map(m => ({ role: m.role, content: m.content }));
         const ollamaOperation = ollama.chat({ model: ollamaModel, messages: ollamaChatMessages, stream: false });
         const ollamaResponse = await Promise.race([
@@ -177,20 +230,20 @@ app.post('/api/chat', async (req, res) => {
         if (ollamaResponse?.message?.content) {
             rawReplyContent = ollamaResponse.message.content;
             respondedBy = `Ollama (${ollamaModel})`;
-            console.log("Respons teks dari Ollama:", rawReplyContent.substring(0, 70) + "...");
+            console.log("   Respons teks dari Ollama:", rawReplyContent.substring(0, 70) + "...");
         } else { throw new Error("Struktur respons tidak valid dari Ollama."); }
     } catch (ollamaError) {
-        console.warn(`Gagal dari Ollama (${ollamaModel}): ${ollamaError.message}`);
+        console.warn(`   Gagal dari Ollama (${ollamaModel}): ${ollamaError.message}`);
         primaryAIError = ollamaError;
 
         if (HF_TOKEN) {
-            console.log("Ollama gagal, mencoba fallback LLM ke Hugging Face (Zephyr)...");
+            console.log("   Ollama gagal, mencoba fallback LLM ke Hugging Face (Zephyr)...");
             try {
                 const HF_LLM_MODEL_ID_ZEPHYR = "HuggingFaceH4/zephyr-7b-beta";
                 const HF_LLM_API_URL_ZEPHYR = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_ZEPHYR}`;
                 const zephyrFormattedPrompt = formatMessagesForZephyr(messages);
                 const hfZephyrPayload = { inputs: zephyrFormattedPrompt, parameters: { return_full_text: false, max_new_tokens: 350, temperature: 0.7, top_p: 0.9 }, options: { wait_for_model: true, use_cache: false } };
-                console.log(`Mengirim ke HF LLM (Zephyr) (Timeout: ${HF_ZEPHYR_TIMEOUT / 1000}s). Prompt (awal): "${zephyrFormattedPrompt.substring(0, 70)}..."`);
+                console.log(`   Mengirim ke HF LLM (Zephyr) (Timeout: ${HF_ZEPHYR_TIMEOUT / 1000}s). Prompt (awal): "${zephyrFormattedPrompt.substring(0, 70)}..."`);
                 const zephyrOperation = fetch(HF_LLM_API_URL_ZEPHYR, { method: "POST", headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(hfZephyrPayload) });
                 const hfZephyrResponse = await Promise.race([
                     zephyrOperation,
@@ -202,18 +255,18 @@ app.post('/api/chat', async (req, res) => {
                 if (Array.isArray(hfZephyrData) && hfZephyrData[0]?.generated_text) {
                     rawReplyContent = hfZephyrData[0].generated_text.trim();
                     respondedBy = `HF (Zephyr)`;
-                    console.log("Respons dari HF LLM (Zephyr):", rawReplyContent.substring(0, 70) + "...");
+                    console.log("   Respons dari HF LLM (Zephyr):", rawReplyContent.substring(0, 70) + "...");
                     primaryAIError = null;
                 } else { throw new Error(`Struktur respons HF LLM (Zephyr) tidak dikenal.`); }
             } catch (zephyrError) {
-                console.error("Gagal dari HF LLM (Zephyr):", zephyrError.message);
-                console.log("Zephyr gagal, mencoba fallback LLM ke Hugging Face (Llama 3)...");
+                console.error("   Gagal dari HF LLM (Zephyr):", zephyrError.message);
+                console.log("   Zephyr gagal, mencoba fallback LLM ke Hugging Face (Llama 3)...");
                 try {
                     const HF_LLM_MODEL_ID_LLAMA3 = "meta-llama/Llama-3-8B-Instruct";
                     const HF_LLM_API_URL_LLAMA3 = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_LLAMA3}`;
                     const llama3FormattedInputs = formatMessagesForLlama3(messages);
                     const hfLlama3Payload = { inputs: llama3FormattedInputs, parameters: { return_full_text: false, max_new_tokens: 450, temperature: 0.6, top_p: 0.9 }, options: { wait_for_model: true, use_cache: false } };
-                    console.log(`Mengirim ke HF LLM (Llama 3) (Timeout: ${HF_LLAMA3_TIMEOUT / 1000}s). Prompt (awal): "${llama3FormattedInputs.substring(0, 70)}..."`);
+                    console.log(`   Mengirim ke HF LLM (Llama 3) (Timeout: ${HF_LLAMA3_TIMEOUT / 1000}s). Prompt (awal): "${llama3FormattedInputs.substring(0, 70)}..."`);
                     const llama3Operation = fetch(HF_LLM_API_URL_LLAMA3, { method: "POST", headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(hfLlama3Payload) });
                     const hfLlama3Response = await Promise.race([
                         llama3Operation,
@@ -225,11 +278,11 @@ app.post('/api/chat', async (req, res) => {
                     if (Array.isArray(hfLlama3Data) && hfLlama3Data[0]?.generated_text) {
                         rawReplyContent = hfLlama3Data[0].generated_text.trim();
                         respondedBy = `HF (Llama 3)`;
-                        console.log("Respons dari HF LLM (Llama 3):", rawReplyContent.substring(0, 70) + "...");
+                        console.log("   Respons dari HF LLM (Llama 3):", rawReplyContent.substring(0, 70) + "...");
                         primaryAIError = null;
                     } else { throw new Error(`Struktur respons HF LLM (Llama 3) tidak dikenal.`); }
                 } catch (llama3Error) {
-                    console.error("Gagal dari HF LLM (Llama 3) juga:", llama3Error.message);
+                    console.error("   Gagal dari HF LLM (Llama 3) juga:", llama3Error.message);
                 }
             }
         }
@@ -244,7 +297,7 @@ app.post('/api/chat', async (req, res) => {
 
     if (finalReplyContent && HF_TOKEN) {
         try {
-            console.log(`Mencoba Gradio TTS: "${finalReplyContent.substring(0, 50)}..."`);
+            console.log(`   Mencoba Gradio TTS: "${finalReplyContent.substring(0, 50)}..."`);
             const { Client } = await import('@gradio/client'); 
             const gradioClient = await Client.connect("NihalGazi/Text-To-Speech-Unlimited", { hf_token: HF_TOKEN });
             const ttsResult = await gradioClient.predict("/text_to_speech_app", {
@@ -256,22 +309,26 @@ app.post('/api/chat', async (req, res) => {
                 if (audioInfo.url || (audioInfo.data && audioInfo.name) || (audioInfo.path && audioInfo.is_file)) {
                     audioDataForFrontend = audioInfo;
                     audioProvider = "NihalGazi/TTS";
-                    console.log("Audio Gradio didapatkan.");
-                } else { console.warn("Gradio data[0] tidak ada 'url'/'data+name'/'path(file)' valid:", audioInfo); }
-            } else { console.warn("Gradio TTS tidak mengembalikan data audio valid.", ttsResult?.data); }
-        } catch (gradioError) { console.error("Error Gradio TTS:", gradioError); }
+                    console.log("   Audio Gradio didapatkan.");
+                } else { console.warn("   Gradio data[0] tidak ada 'url'/'data+name'/'path(file)' valid:", audioInfo); }
+            } else { console.warn("   Gradio TTS tidak mengembalikan data audio valid.", ttsResult?.data); }
+        } catch (gradioError) { console.error("   Error Gradio TTS:", gradioError); }
     }
 
     let providerInfo = respondedBy;
     if (audioProvider) { providerInfo += ` + Suara: ${audioProvider}`; }
+    console.log(`   [${new Date().toISOString()}] Mengirim respons untuk /api/chat:`, { role: "assistant", content: finalReplyContent.substring(0,50)+'...', provider: providerInfo, audioData: audioDataForFrontend ? 'Ada data audio' : 'Tidak ada data audio' });
     res.json({ reply: { role: "assistant", content: finalReplyContent, provider: providerInfo, audioData: audioDataForFrontend } });
 });
 
 app.get('/', (req, res) => { res.send('Chat backend siap!'); });
 
 app.use((err, req, res, next) => {
-  console.error("Terjadi error tidak tertangani:", err.stack);
-  res.status(500).send('Terjadi kesalahan pada server!');
+  console.error(`[${new Date().toISOString()}] Terjadi error tidak tertangani: ${err.message}`);
+  console.error(err.stack);
+  if (!res.headersSent) { 
+    res.status(500).send('Terjadi kesalahan pada server!');
+  }
 });
 
 app.listen(port, '0.0.0.0', () => { console.log(`Backend listening di port ${port}`); });
