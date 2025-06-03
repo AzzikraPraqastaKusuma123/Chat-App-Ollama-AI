@@ -63,7 +63,7 @@ function formatMessagesForLlama3(messagesArray, systemMessage = "Anda adalah asi
 async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength) {
     const translatedParts = [];
     let remainingText = text;
-    if (text && text.length > maxChunkLength) { // Hanya log jika memang panjang
+    if (text && text.length > maxChunkLength) {
         console.log(`Menerjemahkan teks panjang (${text.length} chars) dalam beberapa bagian...`);
     }
 
@@ -109,7 +109,7 @@ async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength)
             translatedParts.push(chunkToSend);
         }
     }
-    if (text && text.length > maxChunkLength) { // Hanya log jika memang panjang
+    if (text && text.length > maxChunkLength) {
       console.log("Semua bagian selesai diproses untuk terjemahan.");
     }
     return translatedParts.join(" ").trim();
@@ -155,7 +155,7 @@ app.post('/api/chat', async (req, res) => {
 
     const OLLAMA_TIMEOUT = 10000;
     const HF_ZEPHYR_TIMEOUT = 25000;
-    const HF_LLAMA3_TIMEOUT = 45000;
+    const HF_LLAMA3_TIMEOUT = 45000; // Anda bisa menaikkan ini jika curiga timeout, tapi 404 bukan karena ini.
 
     let rawReplyContent = "";
     let respondedBy = "";
@@ -186,7 +186,7 @@ app.post('/api/chat', async (req, res) => {
 
             if (!hfLlama3Response.ok) { 
                 let e = `HF LLM (Llama 3) error: ${hfLlama3Response.status} ${hfLlama3Response.statusText} - ${responseLlama3Text}`; 
-                try { const parsedError = JSON.parse(responseLlama3Text); e = parsedError.error || (Array.isArray(parsedError.errors) ? parsedError.errors.join(', ') : e); } catch (_) { } 
+                try { const parsedError = JSON.parse(responseLlama3Text); e = parsedError.error || (Array.isArray(parsedError.errors) ? parsedError.errors.join(', ') : e); } catch (_) { /* Biarkan pesan error asli jika parse gagal */ } 
                 throw new Error(e); 
             }
             const hfLlama3Data = JSON.parse(responseLlama3Text);
@@ -228,7 +228,7 @@ app.post('/api/chat', async (req, res) => {
 
             if (!hfZephyrResponse.ok) { 
                 let e = `HF LLM (Zephyr) error: ${hfZephyrResponse.status} ${hfZephyrResponse.statusText} - ${responseZephyrText}`; 
-                try { const parsedError = JSON.parse(responseZephyrText); e = parsedError.error || (Array.isArray(parsedError.errors) ? parsedError.errors.join(', ') : e); } catch (_) { } 
+                try { const parsedError = JSON.parse(responseZephyrText); e = parsedError.error || (Array.isArray(parsedError.errors) ? parsedError.errors.join(', ') : e); } catch (_) { /* Biarkan pesan error asli jika parse gagal */ } 
                 throw new Error(e); 
             }
             const hfZephyrData = JSON.parse(responseZephyrText);
@@ -246,9 +246,9 @@ app.post('/api/chat', async (req, res) => {
             console.warn(`Gagal dari HF (Zephyr): ${zephyrError.message}`);
             lastError = zephyrError;
         }
-    } else if (!attemptSuccessful && !HF_TOKEN_ZEPHYR) {
-        console.log("HF_TOKEN_ZEPHYR tidak tersedia, melewati percobaan model Zephyr.");
-        if (!lastError) lastError = new Error("HF_TOKEN_ZEPHYR tidak tersedia untuk model Zephyr.");
+    } else if (!attemptSuccessful && !HF_TOKEN_ZEPHYR) { 
+        console.log("HF_TOKEN_ZEPHYR tidak tersedia (atau Llama 3 sudah sukses/tokennya tidak ada), melewati percobaan model Zephyr.");
+        if (!lastError && !HF_TOKEN_LLAMA3) lastError = new Error("HF_TOKEN_ZEPHYR tidak tersedia untuk model Zephyr.");
     }
 
     // 3. Coba tinyllama (Ollama) - jika semua model HF gagal atau token HF tidak ada
@@ -293,8 +293,6 @@ app.post('/api/chat', async (req, res) => {
 
     const finalReplyContent = await translateTextWithMyMemory(textForProcessing, 'en', 'id');
 
-    // Logika TTS (Gradio)
-    // Menggunakan salah satu token yang tersedia untuk Gradio, prioritaskan Llama3, lalu Zephyr.
     const tokenForGradio = HF_TOKEN_LLAMA3 || HF_TOKEN_ZEPHYR; 
     if (finalReplyContent && tokenForGradio) {
         try {
