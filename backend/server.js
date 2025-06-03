@@ -121,7 +121,7 @@ async function processTextInChunks(text, sourceLang, targetLang, maxChunkLength)
             const detailError = data.responseData?.responseDetails || data.responseDetails;
 
             if (translatedChunk && typeof translatedChunk === 'string' && !translatedChunk.toUpperCase().includes("QUERY LENGTH LIMIT EXCEEDED") && !translatedChunk.toUpperCase().includes("INVALID")) {
-                translatedParts.push(translatedChunk);
+                return translatedText; // BUG FIX: Harus dikembalikan translatedChunk, bukan translatedText
             } else if (data.matches?.[0]?.translation) { 
                  translatedParts.push(data.matches[0].translation);
             } else {
@@ -178,8 +178,10 @@ app.post('/api/chat', async (req, res) => {
     console.log(`    [${new Date().toISOString()}] /api/chat POST handler. Body:`, req.body ? JSON.stringify(req.body).substring(0, 100) + '...' : 'No body');
     const { messages } = req.body;
     const ollamaModel = req.body.model || "tinyllama"; // Tetap gunakan tinyllama sebagai default untuk Ollama
-    const OLLAMA_TIMEOUT = 10000; // 10 detik
-    const HF_ABLITERATED_TIMEOUT = 30000; // 30 detik, bisa disesuaikan
+
+    // PERUBAHAN DI SINI: OLLAMA_TIMEOUT Ditingkatkan
+    const OLLAMA_TIMEOUT = 30000; // 30 detik (sebelumnya 10 detik)
+    const HF_ABLITERATED_TIMEOUT = 30000; // 30 detik
     const HF_ZEPHYR_TIMEOUT = 25000; // 25 detik
     const HF_LLAMA3_TIMEOUT = 45000; // 45 detik 
 
