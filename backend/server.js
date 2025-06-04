@@ -1,4 +1,4 @@
-// backend/server.js, coba
+// backend/server.js
 require('dotenv').config(); 
 
 const express = require('express');
@@ -101,10 +101,11 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
 
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    // --- PERBAIKAN DI SINI: MENGUBAH NAMA MODEL OLLAMA KE 'phi3:mini' ---
-    const ollamaModel = req.body.model || "phi3:mini"; // Menggunakan phi3:mini karena sudah diinstal
+    // Menggunakan phi3:mini karena sudah diinstal
+    const ollamaModel = req.body.model || "phi3:mini"; 
     
-    const OLLAMA_TIMEOUT = 10000; // Timeout Ollama 10 detik
+    // --- PERUBAHAN DI SINI: OLLAMA_TIMEOUT DISET KE 1 MENIT (60000 ms) ---
+    const OLLAMA_TIMEOUT = 60000; // Timeout Ollama 1 menit
     const HF_ZEPHYR_TIMEOUT = 25000; // Timeout Zephyr 25 detik
     const HF_UNSLOTH_LLAMA3_TIMEOUT = 30000; // Timeout Unsloth Llama 3 (sesuaikan)
     const HF_MIXTRAL_TIMEOUT = 60000; // Timeout Mixtral (bisa lebih lama karena lebih besar)
