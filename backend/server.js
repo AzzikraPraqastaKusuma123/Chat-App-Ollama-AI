@@ -1,4 +1,4 @@
-// backend/server.js
+// backend/server.js, coba
 require('dotenv').config(); 
 
 const express = require('express');
@@ -101,9 +101,8 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
 
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    // Ganti ini dengan model Ollama yang paling ringan dan pintar yang Anda instal.
-    // Contoh: "qwen:1.8b" atau "gemma:2b"
-    const ollamaModel = req.body.model || "qwen:1.8b"; // <-- UBAH NAMA MODEL OLLAMA DI SINI JIKA ANDA INGIN MENGGUNAKAN LAIN
+    // --- PERBAIKAN DI SINI: MENGUBAH NAMA MODEL OLLAMA KE 'phi3:mini' ---
+    const ollamaModel = req.body.model || "phi3:mini"; // Menggunakan phi3:mini karena sudah diinstal
     
     const OLLAMA_TIMEOUT = 10000; // Timeout Ollama 10 detik
     const HF_ZEPHYR_TIMEOUT = 25000; // Timeout Zephyr 25 detik
