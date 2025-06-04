@@ -4,7 +4,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const ollamaImport = require('ollama');
-// const { Client } = require("@gradio/client"); // Akan diimpor dinamis
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -15,7 +14,11 @@ app.use(express.json());
 const HF_TOKEN = process.env.HF_TOKEN; 
 const ollama = ollamaImport.default;
 
-// Logika ini tetap baik untuk memeriksa Ollama saat startup
+// --- Konfigurasi Model Ollama ---
+// Pastikan nama model ini sesuai dengan yang sudah Anda 'ollama pull'
+const OLLAMA_DEFAULT_MODEL = "phi3:mini"; 
+const OLLAMA_TIMEOUT = 300000; // Timeout Ollama 5 menit
+
 if (!ollama || typeof ollama.chat !== 'function') {
     console.error("KESALAHAN KRITIS SAAT STARTUP: Pustaka Ollama tidak termuat dengan benar. Ollama tidak akan tersedia.");
 } else {
@@ -99,16 +102,43 @@ async function translateTextWithMyMemory(textToTranslate, sourceLang = 'en', tar
     }
 }
 
+// Fungsi untuk melakukan pemanasan (warm-up) model Ollama
+async function warmUpOllamaModel(modelName) {
+    if (!ollama || typeof ollama.chat !== 'function') {
+        console.warn("Ollama tidak siap untuk warm-up.");
+        return;
+    }
+    console.log(`Melakukan pemanasan model Ollama: ${modelName}...`);
+    const warmUpPrompt = "Sebutkan satu kata untuk pemanasan."; // Prompt singkat
+    try {
+        const warmUpOperation = ollama.chat({ 
+            model: modelName, 
+            messages: [{ role: 'user', content: warmUpPrompt }], 
+            stream: false 
+        });
+        const warmUpResponse = await Promise.race([
+            warmUpOperation,
+            createTimeoutPromise(OLLAMA_TIMEOUT, `Warm-up Ollama (${modelName}) timeout.`)
+        ]);
+
+        if (warmUpResponse?.message?.content) {
+            console.log(`Pemanasan Ollama (${modelName}) berhasil! Respons: "${warmUpResponse.message.content.substring(0, 50)}..."`);
+        } else {
+            console.warn(`Pemanasan Ollama (${modelName}) tidak mengembalikan respons valid.`);
+        }
+    } catch (error) {
+        console.error(`Gagal melakukan pemanasan Ollama (${modelName}): ${error.message}`);
+    }
+}
+
+
 app.post('/api/chat', async (req, res) => {
     const { messages } = req.body;
-    // Menggunakan phi3:mini karena sudah diinstal
-    const ollamaModel = req.body.model || "phi3:mini"; 
     
-    // --- PERUBAHAN DI SINI: OLLAMA_TIMEOUT DISET KE 1 MENIT (60000 ms) ---
-    const OLLAMA_TIMEOUT = 60000; // Timeout Ollama 1 menit
-    const HF_ZEPHYR_TIMEOUT = 25000; // Timeout Zephyr 25 detik
-    const HF_UNSLOTH_LLAMA3_TIMEOUT = 30000; // Timeout Unsloth Llama 3 (sesuaikan)
-    const HF_MIXTRAL_TIMEOUT = 60000; // Timeout Mixtral (bisa lebih lama karena lebih besar)
+    // Timeout untuk model Hugging Face
+    const HF_ZEPHYR_TIMEOUT = 300000; // Timeout Zephyr 5 menit
+    const HF_UNSLOTH_LLAMA3_TIMEOUT = 300000; // Timeout Unsloth Llama 3 5 menit
+    const HF_MIXTRAL_TIMEOUT = 300000; // Timeout Mixtral 5 menit
     
     let rawReplyContent = ""; 
     let respondedBy = ""; 
@@ -120,150 +150,126 @@ app.post('/api/chat', async (req, res) => {
         return res.status(400).json({ error: "Messages array is required." });
     }
     
-    // --- PRIORITAS 1: Hugging Face (Mixtral-8x7B-Instruct-v0.1) ---
-    try { 
-        if (!HF_TOKEN) {
-            throw new Error("HF_TOKEN tidak ditemukan. Tidak dapat menggunakan model Hugging Face.");
+    // --- PRIORITAS 1: Ollama (phi3:mini) ---
+    if (ollama && typeof ollama.chat === 'function') {
+        console.log(`Mencoba model Ollama: ${OLLAMA_DEFAULT_MODEL} (Timeout: ${OLLAMA_TIMEOUT/1000}s)...`);
+        try { 
+            const ollamaChatMessages = messages.map(m => ({role: m.role, content: m.content}));
+            const ollamaOperation = ollama.chat({ model: OLLAMA_DEFAULT_MODEL, messages: ollamaChatMessages, stream: false });
+            const ollamaResponse = await Promise.race([
+                ollamaOperation,
+                createTimeoutPromise(OLLAMA_TIMEOUT, `Model Ollama (${OLLAMA_DEFAULT_MODEL}) timeout.`)
+            ]);
+            if (ollamaResponse?.message?.content) {
+                rawReplyContent = ollamaResponse.message.content;
+                respondedBy = `Ollama (${OLLAMA_DEFAULT_MODEL})`;
+                console.log("Respons teks dari Ollama:", rawReplyContent.substring(0,70)+"...");
+                primaryAIError = null; // Reset error jika berhasil
+            } else { throw new Error("Struktur respons tidak valid dari Ollama."); }
+        } catch (ollamaError) {
+            console.error(`Gagal dari Ollama (${OLLAMA_DEFAULT_MODEL}): ${ollamaError.message}`);
+            primaryAIError = ollamaError; // Simpan error Ollama
         }
-        console.log(`Mencoba model Hugging Face (Mixtral-8x7B-Instruct-v0.1) (Timeout: ${HF_MIXTRAL_TIMEOUT/1000}s)...`);
-        const HF_LLM_MODEL_ID_MIXTRAL = "mistralai/Mixtral-8x7B-Instruct-v0.1"; 
-        const HF_LLM_API_URL_MIXTRAL = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_MIXTRAL}`;
-        const mixtralFormattedPrompt = formatMessagesForMixtral(messages); 
-        const hfMixtralPayload = { inputs: mixtralFormattedPrompt, parameters: { return_full_text: false, max_new_tokens: 500, temperature: 0.7, top_p: 0.9 }, options: { wait_for_model: true, use_cache: false } };
-        console.log(`Mengirim ke HF LLM (Mixtral) (Timeout: ${HF_MIXTRAL_TIMEOUT/1000}s). Prompt (awal): "${mixtralFormattedPrompt.substring(0,70)}..."`);
-        const mixtralOperation = fetch(HF_LLM_API_URL_MIXTRAL, { method: "POST", headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(hfMixtralPayload) });
-        const hfMixtralResponse = await Promise.race([
-            mixtralOperation,
-            createTimeoutPromise(HF_MIXTRAL_TIMEOUT, `Model HF (Mixtral) timeout (${HF_MIXTRAL_TIMEOUT/1000}s).`)
-        ]);
-        const responseMixtralText = await hfMixtralResponse.text();
-        if (!hfMixtralResponse.ok) { 
-            let e = `HF LLM (Mixtral) error: ${hfMixtralResponse.status} - ${responseMixtralText}`; 
-            try {e = JSON.parse(responseMixtralText).error||(Array.isArray(JSON.parse(responseMixtralText).errors) ? JSON.parse(responseMixtralText).errors.join(', ') : e);}catch(_){} 
-            throw new Error(e); 
-        }
-        const hfMixtralData = JSON.parse(responseMixtralText); 
-        if (Array.isArray(hfMixtralData) && hfMixtralData[0]?.generated_text) {
-            rawReplyContent = hfMixtralData[0].generated_text.trim(); 
-            respondedBy = `HF (Mixtral)`;
-            console.log("Respons dari HF LLM (Mixtral):", rawReplyContent.substring(0,70)+"...");
-            primaryAIError = null; // Reset error jika berhasil
-        } else { throw new Error(`Struktur respons HF LLM (Mixtral) tidak dikenal.`);}
-    } catch (mixtralError) {
-        console.warn(`Gagal dari Hugging Face (Mixtral): ${mixtralError.message}`);
-        primaryAIError = mixtralError; // Simpan error Mixtral
-
-        // --- PRIORITAS 2: Hugging Face (Zephyr) ---
-        if (HF_TOKEN) {
-            console.log("Mixtral gagal, mencoba fallback LLM ke Hugging Face (Zephyr)...");
-            try { 
-                const HF_LLM_MODEL_ID_ZEPHYR = "HuggingFaceH4/zephyr-7b-beta"; 
-                const HF_LLM_API_URL_ZEPHYR = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_ZEPHYR}`;
-                const zephyrFormattedPrompt = formatMessagesForZephyr(messages); 
-                const hfZephyrPayload = { inputs: zephyrFormattedPrompt, parameters: { return_full_text: false, max_new_tokens: 350, temperature: 0.7, top_p: 0.9 }, options: { wait_for_model: true, use_cache: false } };
-                console.log(`Mengirim ke HF LLM (Zephyr) (Timeout: ${HF_ZEPHYR_TIMEOUT/1000}s). Prompt (awal): "${zephyrFormattedPrompt.substring(0,70)}..."`);
-                const zephyrOperation = fetch(HF_LLM_API_URL_ZEPHYR, { method: "POST", headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(hfZephyrPayload) });
-                const hfZephyrResponse = await Promise.race([
-                    zephyrOperation,
-                    createTimeoutPromise(HF_ZEPHYR_TIMEOUT, `Model HF (Zephyr) timeout (${HF_ZEPHYR_TIMEOUT/1000}s).`)
-                ]);
-                const responseZephyrText = await hfZephyrResponse.text();
-                if (!hfZephyrResponse.ok) { let e = `HF LLM (Zephyr) error: ${hfZephyrResponse.status} - ${responseZephyrText}`; try {e = JSON.parse(responseZephyrText).error||(Array.isArray(JSON.parse(responseZephyrText).errors) ? JSON.parse(responseZephyrText).errors.join(', ') : e);}catch(_){} throw new Error(e); }
-                const hfZephyrData = JSON.parse(responseZephyrText); 
-                if (Array.isArray(hfZephyrData) && hfZephyrData[0]?.generated_text) {
-                    rawReplyContent = hfZephyrData[0].generated_text.trim(); 
-                    respondedBy = `HF (Zephyr)`;
-                    console.log("Respons dari HF LLM (Zephyr):", rawReplyContent.substring(0,70)+"...");
-                    primaryAIError = null; // Reset error jika berhasil
-                } else { throw new Error(`Struktur respons HF LLM (Zephyr) tidak dikenal.`);}
-            } catch (zephyrErrorFallback) {
-                console.error("Gagal dari HF LLM (Zephyr):", zephyrErrorFallback.message);
-                primaryAIError = zephyrErrorFallback; // Simpan error Zephyr
-
-                // --- PRIORITAS 3: Hugging Face (Unsloth Llama 3) ---
-                console.log("Zephyr gagal, mencoba fallback LLM ke Hugging Face (Unsloth Llama 3)...");
-                try { 
-                    const HF_LLM_MODEL_ID_UNSLOTH_LLAMA3 = "unsloth/llama-3-8b-Instruct"; 
-                    const HF_LLM_API_URL_UNSLOTH_LLAMA3 = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_UNSLOTH_LLAMA3}`;
-                    const unslothLlama3FormattedInputs = formatMessagesForLlama3(messages); 
-                    const hfUnslothLlama3Payload = { inputs: unslothLlama3FormattedInputs, parameters: { return_full_text: false, max_new_tokens: 450, temperature: 0.6, top_p: 0.9 }, options: { wait_for_model: true, use_cache: false } };
-                    console.log(`Mengirim ke HF LLM (Unsloth Llama 3) (Timeout: ${HF_UNSLOTH_LLAMA3_TIMEOUT/1000}s). Prompt (awal): "${unslothLlama3FormattedInputs.substring(0,70)}..."`);
-                    const unslothLlama3Operation = fetch(HF_LLM_API_URL_UNSLOTH_LLAMA3, { method: "POST", headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(hfUnslothLlama3Payload) });
-                    const hfUnslothLlama3Response = await Promise.race([
-                        unslothLlama3Operation,
-                        createTimeoutPromise(HF_UNSLOTH_LLAMA3_TIMEOUT, `Model HF (Unsloth Llama 3) timeout (${HF_UNSLOTH_LLAMA3_TIMEOUT/1000}s).`)
-                    ]);
-                    const responseUnslothLlama3Text = await hfUnslothLlama3Response.text();
-                    if (!hfUnslothLlama3Response.ok) { let e = `HF LLM (Unsloth Llama 3) error: ${hfUnslothLlama3Response.status} - ${responseUnslothLlama3Text}`; try {e = JSON.parse(responseUnslothLlama3Text).error||(Array.isArray(JSON.parse(responseUnslothLlama3Text).errors) ? JSON.parse(responseUnslothLlama3Text).errors.join(', ') : e);}catch(_){} throw new Error(e); }
-                    const hfUnslothLlama3Data = JSON.parse(responseUnslothLlama3Text); 
-                    if (Array.isArray(hfUnslothLlama3Data) && hfUnslothLlama3Data[0]?.generated_text) {
-                        rawReplyContent = hfUnslothLlama3Data[0].generated_text.trim(); 
-                        respondedBy = `HF (Unsloth Llama 3)`;
-                        console.log("Respons dari HF LLM (Unsloth Llama 3):", rawReplyContent.substring(0,70)+"...");
-                        primaryAIError = null; // Reset error jika berhasil
-                    } else { throw new Error(`Struktur respons HF LLM (Unsloth Llama 3) tidak dikenal.`);}
-                } catch (unslothLlama3ErrorFallback) {
-                    console.error("Gagal dari HF LLM (Unsloth Llama 3):", unslothLlama3ErrorFallback.message);
-                    primaryAIError = unslothLlama3ErrorFallback; // Simpan error Unsloth Llama 3
-
-                    // --- PRIORITAS 4 (Terakhir): Ollama ---
-                    if (ollama && typeof ollama.chat === 'function') {
-                        console.log(`Semua model HF gagal, mencoba fallback LLM ke Ollama: ${ollamaModel} (Timeout: ${OLLAMA_TIMEOUT/1000}s)...`);
-                        try { 
-                            const ollamaChatMessages = messages.map(m => ({role: m.role, content: m.content}));
-                            const ollamaOperation = ollama.chat({ model: ollamaModel, messages: ollamaChatMessages, stream: false });
-                            const ollamaResponse = await Promise.race([
-                                ollamaOperation,
-                                createTimeoutPromise(OLLAMA_TIMEOUT, `Model Ollama (${ollamaModel}) timeout.`)
-                            ]);
-                            if (ollamaResponse?.message?.content) {
-                                rawReplyContent = ollamaResponse.message.content;
-                                respondedBy = `Ollama (${ollamaModel})`;
-                                console.log("Respons teks dari Ollama:", rawReplyContent.substring(0,70)+"...");
-                                primaryAIError = null; // Reset error jika berhasil
-                            } else { throw new Error("Struktur respons tidak valid dari Ollama."); }
-                        } catch (ollamaError) {
-                            console.error(`Gagal dari Ollama (${ollamaModel}) juga: ${ollamaError.message}`);
-                            primaryAIError = ollamaError; 
-                        }
-                    } else {
-                        console.warn("Ollama tidak siap atau tidak diatur.");
-                    }
-                }
-            }
-        } else {
-            console.warn("HF_TOKEN tidak ditemukan. Tidak dapat mencoba model Hugging Face. Melanjutkan ke Ollama.");
-            // Jika HF_TOKEN tidak ada, langsung fallback ke Ollama
-            if (ollama && typeof ollama.chat === 'function') {
-                console.log(`HF_TOKEN tidak ada, mencoba langsung ke Ollama: ${ollamaModel} (Timeout: ${OLLAMA_TIMEOUT/1000}s)...`);
-                try { 
-                    const ollamaChatMessages = messages.map(m => ({role: m.role, content: m.content}));
-                    const ollamaOperation = ollama.chat({ model: ollamaModel, messages: ollamaChatMessages, stream: false });
-                    const ollamaResponse = await Promise.race([
-                        ollamaOperation,
-                        createTimeoutPromise(OLLAMA_TIMEOUT, `Model Ollama (${ollamaModel}) timeout.`)
-                    ]);
-                    if (ollamaResponse?.message?.content) {
-                        rawReplyContent = ollamaResponse.message.content;
-                        respondedBy = `Ollama (${ollamaModel})`;
-                        console.log("Respons teks dari Ollama:", rawReplyContent.substring(0,70)+"...");
-                        primaryAIError = null; 
-                    } else { throw new Error("Struktur respons tidak valid dari Ollama."); }
-                } catch (ollamaError) {
-                    console.error(`Gagal dari Ollama (${ollamaModel}) juga: ${ollamaError.message}`);
-                    primaryAIError = ollamaError; 
-                }
-            } else {
-                console.warn("Ollama tidak siap atau tidak diatur.");
-            }
-        }
+    } else {
+        console.warn("Ollama tidak siap atau tidak diatur. Mencoba fallback ke Hugging Face.");
+        primaryAIError = new Error("Ollama service not ready."); // Error awal jika Ollama tidak siap
     }
+
+    // --- FALLBACK KE HUGGING FACE MODELS JIKA OLLAMA GAGAL ---
+    if (!rawReplyContent && HF_TOKEN) { // Coba HF hanya jika Ollama gagal DAN HF_TOKEN ada
+        console.log("Ollama gagal, mencoba fallback ke Hugging Face Models...");
+        try { 
+            // Coba Mixtral
+            console.log(`Mencoba model Hugging Face (Mixtral-8x7B-Instruct-v0.1) (Timeout: ${HF_MIXTRAL_TIMEOUT/1000}s)...`);
+            const HF_LLM_MODEL_ID_MIXTRAL = "mistralai/Mixtral-8x7B-Instruct-v0.1"; 
+            const HF_LLM_API_URL_MIXTRAL = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_MIXTRAL}`;
+            const mixtralFormattedPrompt = formatMessagesForMixtral(messages); 
+            const hfMixtralPayload = { inputs: mixtralFormattedPrompt, parameters: { return_full_text: false, max_new_tokens: 500, temperature: 0.7, top_p: 0.9 }, options: { wait_for_model: true, use_cache: false } };
+            const mixtralOperation = fetch(HF_LLM_API_URL_MIXTRAL, { method: "POST", headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(hfMixtralPayload) });
+            const hfMixtralResponse = await Promise.race([
+                mixtralOperation,
+                createTimeoutPromise(HF_MIXTRAL_TIMEOUT, `Model HF (Mixtral) timeout (${HF_MIXTRAL_TIMEOUT/1000}s).`)
+            ]);
+            const responseMixtralText = await hfMixtralResponse.text();
+            if (!hfMixtralResponse.ok) { 
+                let e = `HF LLM (Mixtral) error: ${hfMixtralResponse.status} - ${responseMixtralText}`; 
+                try {e = JSON.parse(responseMixtralText).error||(Array.isArray(JSON.parse(responseMixtralText).errors) ? JSON.parse(responseMixtralText).errors.join(', ') : e);}catch(_){} 
+                throw new Error(e); 
+            }
+            const hfMixtralData = JSON.parse(responseMixtralText); 
+            if (Array.isArray(hfMixtralData) && hfMixtralData[0]?.generated_text) {
+                rawReplyContent = hfMixtralData[0].generated_text.trim(); 
+                respondedBy = `HF (Mixtral)`;
+                console.log("Respons dari HF LLM (Mixtral):", rawReplyContent.substring(0,70)+"...");
+                primaryAIError = null; 
+            } else { throw new Error(`Struktur respons HF LLM (Mixtral) tidak dikenal.`);}
+        } catch (mixtralError) {
+            console.warn(`Gagal dari Hugging Face (Mixtral): ${mixtralError.message}`);
+            primaryAIError = mixtralError; 
+
+            // Coba Zephyr
+            console.log("Mixtral gagal, mencoba fallback LLM ke Hugging Face (Zephyr)...");
+            try { 
+                const HF_LLM_MODEL_ID_ZEPHYR = "HuggingFaceH4/zephyr-7b-beta"; 
+                const HF_LLM_API_URL_ZEPHYR = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_ZEPHYR}`;
+                const zephyrFormattedPrompt = formatMessagesForZephyr(messages); 
+                const hfZephyrPayload = { inputs: zephyrFormattedPrompt, parameters: { return_full_text: false, max_new_tokens: 350, temperature: 0.7, top_p: 0.9 }, options: { wait_for_model: true, use_cache: false } };
+                const zephyrOperation = fetch(HF_LLM_API_URL_ZEPHYR, { method: "POST", headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(hfZephyrPayload) });
+                const hfZephyrResponse = await Promise.race([
+                    zephyrOperation,
+                    createTimeoutPromise(HF_ZEPHYR_TIMEOUT, `Model HF (Zephyr) timeout (${HF_ZEPHYR_TIMEOUT/1000}s).`)
+                ]);
+                const responseZephyrText = await hfZephyrResponse.text();
+                if (!hfZephyrResponse.ok) { let e = `HF LLM (Zephyr) error: ${hfZephyrResponse.status} - ${responseZephyrText}`; try {e = JSON.parse(responseZephyrText).error||(Array.isArray(JSON.parse(responseZephyrText).errors) ? JSON.parse(responseZephyrText).errors.join(', ') : e);}catch(_){} throw new Error(e); }
+                const hfZephyrData = JSON.parse(responseZephyrText); 
+                if (Array.isArray(hfZephyrData) && hfZephyrData[0]?.generated_text) {
+                    rawReplyContent = hfZephyrData[0].generated_text.trim(); 
+                    respondedBy = `HF (Zephyr)`;
+                    console.log("Respons dari HF LLM (Zephyr):", rawReplyContent.substring(0,70)+"...");
+                    primaryAIError = null; 
+                } else { throw new Error(`Struktur respons HF LLM (Zephyr) tidak dikenal.`);}
+            } catch (zephyrErrorFallback) {
+                console.error("Gagal dari HF LLM (Zephyr):", zephyrErrorFallback.message);
+                primaryAIError = zephyrErrorFallback; 
+
+                // Coba Unsloth Llama 3
+                console.log("Zephyr gagal, mencoba fallback LLM ke Hugging Face (Unsloth Llama 3)...");
+                try { 
+                    const HF_LLM_MODEL_ID_UNSLOTH_LLAMA3 = "unsloth/llama-3-8b-Instruct"; 
+                    const HF_LLM_API_URL_UNSLOTH_LLAMA3 = `https://api-inference.huggingface.co/models/${HF_LLM_MODEL_ID_UNSLOTH_LLAMA3}`;
+                    const unslothLlama3FormattedInputs = formatMessagesForLlama3(messages); 
+                    const hfUnslothLlama3Payload = { inputs: unslothLlama3FormattedInputs, parameters: { return_full_text: false, max_new_tokens: 450, temperature: 0.6, top_p: 0.9 }, options: { wait_for_model: true, use_cache: false } };
+                    const unslothLlama3Operation = fetch(HF_LLM_API_URL_UNSLOTH_LLAMA3, { method: "POST", headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(hfUnslothLlama3Payload) });
+                    const hfUnslothLlama3Response = await Promise.race([
+                        unslothLlama3Operation,
+                        createTimeoutPromise(HF_UNSLOTH_LLAMA3_TIMEOUT, `Model HF (Unsloth Llama 3) timeout (${HF_UNSLOTH_LLAMA3_TIMEOUT/1000}s).`)
+                    ]);
+                    const responseUnslothLlama3Text = await hfUnslothLlama3Response.text();
+                    if (!hfUnslothLlama3Response.ok) { let e = `HF LLM (Unsloth Llama 3) error: ${hfUnslothLlama3Response.status} - ${responseUnslothLlama3Text}`; try {e = JSON.parse(responseUnslothLlama3Text).error||(Array.isArray(JSON.parse(responseUnslothLlama3Text).errors) ? JSON.parse(responseUnslothLlama3Text).errors.join(', ') : e);}catch(_){} throw new Error(e); }
+                    const hfUnslothLlama3Data = JSON.parse(responseUnslothLlama3Text); 
+                    if (Array.isArray(hfUnslothLlama3Data) && hfUnslothLlama3Data[0]?.generated_text) {
+                        rawReplyContent = hfUnslothLlama3Data[0].generated_text.trim(); 
+                        respondedBy = `HF (Unsloth Llama 3)`;
+                        console.log("Respons dari HF LLM (Unsloth Llama 3):", rawReplyContent.substring(0,70)+"...");
+                        primaryAIError = null; 
+                    } else { throw new Error(`Struktur respons HF LLM (Unsloth Llama 3) tidak dikenal.`);}
+                } catch (unslothLlama3ErrorFallback) {
+                    console.error("Gagal dari HF LLM (Unsloth Llama 3):", unslothLlama3ErrorFallback.message);
+                    primaryAIError = unslothLlama3ErrorFallback; 
+                }
+            }
+        }
+    } else if (!rawReplyContent && !HF_TOKEN) {
+        console.warn("HF_TOKEN tidak ditemukan. Tidak dapat mencoba model Hugging Face. Hanya Ollama yang tersedia.");
+        primaryAIError = new Error("HF_TOKEN tidak ditemukan, model Hugging Face tidak tersedia.");
+    }
+    // Jika tidak ada model yang berhasil, primaryAIError akan tetap ada
 
     let textForProcessing = "";
     if (rawReplyContent) { textForProcessing = rawReplyContent; } 
     else if (primaryAIError) { 
         textForProcessing = `Maaf, terjadi masalah dengan AI: ${primaryAIError.message}.`; 
-        if (respondedBy === "") respondedBy = `Sistem Error (No LLM)`; // Jika tidak ada model yang merespons
+        if (respondedBy === "") respondedBy = `Sistem Error (No LLM)`; 
     } 
     else { 
         textForProcessing = "Maaf, terjadi kesalahan internal."; 
@@ -299,4 +305,9 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.get('/', (req, res) => { res.send('Chat backend siap!'); });
-app.listen(port, '0.0.0.0', () => { console.log(`Backend listening di port ${port}`); });
+
+// --- PANGGIL FUNGSI PEMANASAN SETELAH SERVER MULAI ---
+app.listen(port, '0.0.0.0', () => { 
+    console.log(`Backend listening di port ${port}`); 
+    warmUpOllamaModel(OLLAMA_DEFAULT_MODEL); // Panggil fungsi pemanasan
+});
