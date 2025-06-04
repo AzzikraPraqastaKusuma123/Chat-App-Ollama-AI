@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { MessageCard } from "./components/MessageCard";
-import styles from './App.module.css';
+import { MessageCard } from "./components/MessageCard"; // Pastikan path ini benar
+import styles from './App.module.css'; // Pastikan path ini benar
 
 // ... (Interface dan Definisi Tipe Global lainnya tetap sama) ...
 // (Saya singkat bagian interface agar tidak terlalu panjang, pastikan bagian ini ada di kode Anda)
@@ -49,7 +49,7 @@ type Message = {
     content: string;
     timestamp: string;
     provider?: string;
-    audioData?: any;
+    audioData?: any; // Bisa berupa URL, base64 data, atau objek dari Gradio
 };
 
 const SendIcon = () => (
@@ -71,6 +71,7 @@ const MicrophoneIcon = () => (
     </svg>
 );
 
+// Komponen VoiceWaveform (untuk STT dan visualisasi audio dari <audio>)
 interface VoiceWaveformProps {
     analyserNode: AnalyserNode | null;
     isListening: boolean; 
@@ -146,21 +147,81 @@ const VoiceWaveform: React.FC<VoiceWaveformProps> = ({
     return <canvas ref={canvasRef} width={width} height={height} className={styles.voiceWaveformCanvasRadial} />;
 };
 
-interface RadialPulseWaveformProps { isActive: boolean; width?: number; height?: number; }
-const RadialPulseWaveform: React.FC<RadialPulseWaveformProps> = ({ isActive, width = 100, height = 100 }) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null); const animationFrameIdRef = useRef<number | null>(null); const phaseRef = useRef(0);
-    const NUM_BARS = 40; const CENTER_ORB_MIN_RADIUS = 8; const CENTER_ORB_MAX_RADIUS = 12; const RING_RADIUS = 22; const MAX_BAR_LENGTH = 20; const MIN_BAR_LENGTH = 4; const BAR_WIDTH = 2; const BAR_COLORS = ['#A7F3D0', '#67E8F9', '#4FD1C5', '#3B82F6']; const CENTER_MAIN_COLOR = 'rgba(180, 240, 255, 0.8)'; const CENTER_GLOW_COLOR = 'rgba(180, 240, 255, 0.25)';
+// Komponen RadialPulseWaveform (untuk animasi header yang selalu aktif)
+interface RadialPulseWaveformProps { isActive: boolean; width?: number; height?: number; colorScheme?: 'default' | 'vibrant'; }
+const RadialPulseWaveform: React.FC<RadialPulseWaveformProps> = ({ isActive, width = 140, height = 50, colorScheme = 'vibrant' }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const animationFrameIdRef = useRef<number | null>(null);
+    const phaseRef = useRef(0);
+
+    const NUM_BARS = Math.max(24, Math.floor(width * 0.4));
+    const CENTER_ORB_RADIUS = height * 0.2;
+    const RING_RADIUS_START = height * 0.4;
+    const RING_RADIUS_END = height * 0.65;
+    const MAX_BAR_LENGTH = RING_RADIUS_END - RING_RADIUS_START;
+    const MIN_BAR_LENGTH = 0;
+    const BAR_WIDTH = Math.max(1.2, Math.min(2.8, width * 0.02));
+    const PULSE_SPEED = 0.035;
+
+    const defaultColors = ['#A7F3D0', '#67E8F9', '#4FD1C5', '#3B82F6', '#818CF8'];
+    const vibrantColors = ['#FFD700', '#FF8A65', '#A0F080', '#64B5F6', '#BA68C8'];
+    const colors = colorScheme === 'vibrant' ? vibrantColors : defaultColors;
+    const centerColor = colorScheme === 'vibrant' ? 'rgba(255, 215, 0, 0.8)' : 'rgba(180, 240, 255, 0.85)';
+    const centerGlow = colorScheme === 'vibrant' ? 'rgba(255, 215, 0, 0.3)' : 'rgba(180, 240, 255, 0.3)';
 
     useEffect(() => {
         const canvas = canvasRef.current; if (!isActive || !canvas) { if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current); if (canvas) {const ctx = canvas.getContext('2d'); ctx?.clearRect(0, 0, canvas.width, canvas.height); } return; }
         const context = canvas.getContext('2d'); if (!context) return; const centerX = width / 2; const centerY = height / 2;
         const draw = () => {
-            animationFrameIdRef.current = requestAnimationFrame(draw); phaseRef.current += 0.04; context.clearRect(0, 0, width, height); const orbPulse = (1 + Math.sin(phaseRef.current * 1.8)) / 2; const orbR = CENTER_ORB_MIN_RADIUS + (CENTER_ORB_MAX_RADIUS - CENTER_ORB_MIN_RADIUS) * orbPulse; context.save(); context.shadowBlur = 15; context.shadowColor = CENTER_GLOW_COLOR; context.fillStyle = CENTER_MAIN_COLOR; context.beginPath(); context.arc(centerX, centerY, orbR, 0, 2 * Math.PI); context.fill(); context.restore(); context.lineWidth = BAR_WIDTH; context.lineCap = 'round';
-            for (let i = 0; i < NUM_BARS; i++) { const angle = (i / NUM_BARS) * 2 * Math.PI - Math.PI / 2; const barAnimPhase = phaseRef.current + (i * Math.PI * 2.8) / NUM_BARS; const barPulse = (1 + Math.sin(barAnimPhase)) / 2; const barLen = MIN_BAR_LENGTH + barPulse * (MAX_BAR_LENGTH - MIN_BAR_LENGTH); const sX = centerX + RING_RADIUS * Math.cos(angle); const sY = centerY + RING_RADIUS * Math.sin(angle); const eX = centerX + (RING_RADIUS + barLen) * Math.cos(angle); const eY = centerY + (RING_RADIUS + barLen) * Math.sin(angle); context.strokeStyle = BAR_COLORS[i % BAR_COLORS.length]; context.globalAlpha = 0.5 + barPulse * 0.5; context.beginPath(); context.moveTo(sX, sY); context.lineTo(eX, eY); context.stroke(); }
+            animationFrameIdRef.current = requestAnimationFrame(draw);
+            phaseRef.current += PULSE_SPEED;
+            context.clearRect(0, 0, width, height);
+
+            const centerPulse = (1 + Math.sin(phaseRef.current * 1.5)) / 2;
+            const currentCenterRadius = CENTER_ORB_RADIUS * (0.9 + 0.1 * centerPulse);
+            context.save();
+            context.shadowBlur = Math.max(8, width * 0.08);
+            context.shadowColor = centerGlow;
+            context.fillStyle = centerColor;
+            context.beginPath();
+            context.arc(centerX, centerY, currentCenterRadius, 0, 2 * Math.PI);
+            context.fill();
+            context.restore();
+
+            context.lineWidth = BAR_WIDTH;
+            context.lineCap = 'round';
+            const overallPulseFactor = (1 + Math.sin(phaseRef.current)) / 2;
+
+            for (let i = 0; i < NUM_BARS; i++) {
+                const angle = (i / NUM_BARS) * 2 * Math.PI - Math.PI / 2;
+                const barPhaseOffset = (i / NUM_BARS) * Math.PI * 1.8;
+                const barPulse = (1 + Math.sin(phaseRef.current * 1.2 + barPhaseOffset)) / 2;
+                const barLength = MIN_BAR_LENGTH + barPulse * MAX_BAR_LENGTH * (0.7 + 0.3 * overallPulseFactor);
+
+                const startRadius = RING_RADIUS_START + (MAX_BAR_LENGTH - barLength) * 0.5;
+                const endRadius = startRadius + barLength;
+
+                const sX = centerX + startRadius * Math.cos(angle);
+                const sY = centerY + startRadius * Math.sin(angle);
+                const eX = centerX + endRadius * Math.cos(angle);
+                const eY = centerY + endRadius * Math.sin(angle);
+
+                context.strokeStyle = colors[(i * 7) % colors.length];
+                context.globalAlpha = 0.7 + barPulse * 0.3;
+                context.beginPath();
+                context.moveTo(sX, sY);
+                context.lineTo(eX, eY);
+                context.stroke();
+            }
             context.globalAlpha = 1.0;
-        }; draw();
-        return () => { if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current); if(canvas) {const ctx = canvas.getContext('2d'); ctx?.clearRect(0, 0, canvas.width, canvas.height);}};
-    }, [isActive, width, height]);
+        };
+        draw();
+        return () => {
+            if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
+            if (canvasRef.current) { const ctx = canvasRef.current.getContext('2d'); ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); }
+        };
+    }, [isActive, width, height, colorScheme, NUM_BARS, CENTER_ORB_RADIUS, RING_RADIUS_START, RING_RADIUS_END, MAX_BAR_LENGTH, MIN_BAR_LENGTH, BAR_WIDTH, PULSE_SPEED, colors, centerColor, centerGlow]);
+
     return <canvas ref={canvasRef} width={width} height={height} className={styles.ttsWaveformCanvas} />;
 };
 
@@ -170,7 +231,7 @@ const getCurrentTimestamp = () => {
 
 function App() {
     const [messages, setMessages] = useState<Message[]>([
-        { role: "assistant", content: "Halo! Saya Asisten AI Anda. Ada yang bisa dibantu?", timestamp: getCurrentTimestamp() },
+        { role: "assistant", content: "Halo! Saya Asisten AI Anda. Ada yang bisa dibantu?", timestamp: getCurrentTimestamp(), provider: "Sistem" },
     ]);
     const [input, setInput] = useState<string>("");
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -329,7 +390,7 @@ function App() {
                 playSound(fallbackText);
             }
         } else if (typeof dataOrText === 'string') {
-            if (typeof speechSynthesis === 'undefined') { console.warn("Browser does not support Web Speech API for TTS."); return; }
+            if (typeof speechSynthesis === 'undefined') { console.warn("Browser tidak mendukung Web Speech API untuk TTS."); return; }
             const utterance = new SpeechSynthesisUtterance(dataOrText);
             utterance.lang = "id-ID";
             let selectedVoice = availableVoices.find(v => v.lang.startsWith('id') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('wanita')));
@@ -385,6 +446,8 @@ function App() {
             else if (event.error === 'audio-capture') userMessage = "Masalah dengan perangkat input audio. Pastikan mikrofon terhubung dan berfungsi.";
             setError(userMessage); setIsListening(false); 
         };
+        
+        let finalTranscriptForInput = '';
         recognitionInstance.onresult = (event: SpeechRecognitionEvent) => {
             let finalTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -393,11 +456,14 @@ function App() {
             if (finalTranscript) setInput(prevInput => (prevInput ? prevInput.trim() + " " : "") + finalTranscript.trim());
         };
         recognitionRef.current = recognitionInstance;
-        return () => {
+
+        return () => { 
             if (recognitionRef.current) {
                 recognitionRef.current.onstart = null; recognitionRef.current.onresult = null;
                 recognitionRef.current.onerror = null; recognitionRef.current.onend = null;
-                try { recognitionRef.current.abort(); } catch (e) { /* ignore */ }
+                try { 
+                    recognitionRef.current.stop(); 
+                } catch (e) { /* ignore */ }
             }
         };
     }, [isSpeakingTTSBrowser, isPlayingTTSFromElement]);
@@ -454,10 +520,14 @@ function App() {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => { 
+        if (e) e.preventDefault();
         const trimmedInput = input.trim();
         if (trimmedInput && !isLoading) {
+            if (isListening && recognitionRef.current) {
+                try { recognitionRef.current.stop(); } catch(e){}
+            }
+
             const newMessage: Message = { role: "user", content: trimmedInput, timestamp: getCurrentTimestamp() };
             setMessages((prevMessages) => [...prevMessages, newMessage]);
             setInput("");
@@ -514,7 +584,7 @@ function App() {
                     </div>
                 )}
             </header>
-            
+
             <main className={styles.mainContent}>
                 <div className={styles.messagesListContainer}>
                     {messages.map((message, index) => (
@@ -550,9 +620,9 @@ function App() {
                 )}
 
                 {error && !isLoading && (
-                     <div className={styles.errorMessageContainer}>
-                        <strong>Error:</strong> {error}
-                    </div>
+                       <div className={styles.errorMessageContainer}>
+                           <strong>Error:</strong> {error}
+                       </div>
                 )}
 
                 <form 

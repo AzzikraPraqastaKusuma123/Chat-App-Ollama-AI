@@ -15,7 +15,7 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  color: var(--text-on-primary-brand);
+  color: var(--text-on-primary-brand, #ffffff);
   text-align: center;
 }
 
@@ -81,7 +81,7 @@
   width: calc(100% - 2rem);
   margin-left: auto;
   margin-right: auto;
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04));
   border: 1px solid rgba(255,255,255,0.05);
   position: absolute;
   bottom: 0; 
@@ -161,15 +161,16 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .inputTextArea::placeholder {
-  color: var(--text-muted);
+  color: var(--text-muted, #6b7280);
   opacity: 0.8;
 }
 .inputTextArea:focus {
-  border-color: var(--brand-blue-DEFAULT);
-  box-shadow: 0 0 0 3px var(--ring-color-focus);
+  border-color: var(--brand-blue-DEFAULT, #2563eb);
+  box-shadow: 0 0 0 3.5px var(--ring-color-focus, rgba(59,130,246,0.3)); 
+  background-color: var(--surface-card, #fff); 
 }
 .inputTextArea:disabled {
-  background-color: var(--surface-input-disabled);
+  background-color: var(--surface-input-disabled, #f3f4f6);
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -182,22 +183,22 @@
 
 .iconButton {
   padding: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 48px; 
+  height: 48px; 
+  border-radius: 12px; 
   transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid transparent;
+  border: 1.5px solid transparent; 
   cursor: pointer;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-xs, 0 1px 2px 0 rgba(0,0,0,0.05));
 }
 .iconButton:focus-visible {
   outline: none;
-  border-color: var(--brand-blue-DEFAULT);
-  box-shadow: 0 0 0 3px var(--ring-color-focus);
+  border-color: var(--brand-blue-DEFAULT, #2563eb);
+  box-shadow: 0 0 0 3.5px var(--ring-color-focus, rgba(59,130,246,0.3));
 }
 .iconButton[disabled] {
   opacity: 0.5;
@@ -205,20 +206,20 @@
   box-shadow: none;
 }
 .iconButton:not([disabled]):active {
-  transform: scale(0.94);
+  transform: scale(0.93); 
 }
 @media (min-width: 768px) {
   .iconButton {
-    width: 46px;
-    height: 46px;
+    width: 50px;
+    height: 50px;
   }
 }
 
 .micButtonIdle {
   composes: iconButton;
-  background-color: var(--surface-input);
-  color: var(--text-secondary);
-  border: 1.5px solid var(--border-medium);
+  background-color: var(--surface-input, #ffffff);
+  color: var(--text-secondary, #4b5563);
+  border: 1.5px solid var(--border-medium, #d1d5db);
 }
 .micButtonIdle:hover:not([disabled]) {
   background-color: #f1f5f9;
@@ -228,17 +229,17 @@
 
 .micButtonListening {
   composes: iconButton;
-  background-color: var(--danger-DEFAULT);
-  color: var(--text-on-primary-brand);
-  border-color: var(--danger-dark);
-  box-shadow: 0 0 8px 1px var(--ring-color-danger-focus), var(--shadow-sm);
+  background-color: var(--danger-DEFAULT, #ef4444);
+  color: var(--text-on-primary-brand, #ffffff);
+  border-color: var(--danger-dark, #dc2626);
+  box-shadow: 0 0 8px 1px var(--ring-color-danger-focus, rgba(239,68,68,0.4)), var(--shadow-sm, 0 1px 2px 0 rgba(0,0,0,0.05));
 }
 .micButtonListening:hover:not([disabled]) {
-  background-color: var(--danger-dark);
+  background-color: var(--danger-dark, #dc2626);
 }
 .micButtonListening:focus-visible {
-  border-color: var(--danger-dark);
-  box-shadow: 0 0 0 3px var(--ring-color-danger-focus), var(--shadow-sm);
+  border-color: var(--danger-dark, #dc2626);
+  box-shadow: 0 0 0 3.5px var(--ring-color-danger-focus, rgba(239,68,68,0.4)), var(--shadow-sm, 0 1px 2px 0 rgba(0,0,0,0.05));
 }
 
 .micIcon {
@@ -267,17 +268,18 @@
 
 .sendButton {
   composes: iconButton;
-  background-image: linear-gradient(to right, var(--brand-blue-DEFAULT), var(--brand-indigo-DEFAULT));
-  color: var(--text-on-primary-brand);
+  background-image: linear-gradient(to right, var(--brand-blue-DEFAULT, #2563eb), var(--brand-indigo-DEFAULT, #4f46e5));
+  color: var(--text-on-primary-brand, #ffffff);
   font-weight: 500;
+  border: none; 
 }
 .sendButton:hover:not([disabled]) {
-  background-image: linear-gradient(to right, var(--brand-blue-dark), var(--brand-indigo-dark));
-  box-shadow: var(--shadow-md);
+  background-image: linear-gradient(to right, var(--brand-blue-dark, #1d4ed8), var(--brand-indigo-dark, #3730a3));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); 
 }
 .sendButton[disabled] {
   background-image: none;
-  background-color: var(--border-medium);
+  background-color: var(--border-medium, #d1d5db);
 }
 .sendButton svg {
   width: 1.2rem;
@@ -293,23 +295,23 @@
   align-items: flex-end;
   gap: 10px;
   margin-top: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 16px; /* Disesuaikan dengan margin-bottom .messageWrapper */
   width: 100%;
   justify-content: flex-start;
 }
 .loadingIndicatorAvatar {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 40px; /* Sama dengan avatar biasa */
+  height: 40px; /* Sama dengan avatar biasa */
   border-radius: 50%;
-  background-image: linear-gradient(135deg, #64748b, #475569);
+  background-image: linear-gradient(135deg, #64748b, #4b5563); /* Sama dengan avatar assistant */
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-on-primary-brand);
-  font-size: 0.9rem;
-  font-weight: 500;
-  box-shadow: var(--shadow-sm);
+  color: var(--text-on-primary-brand, #ffffff);
+  font-size: 1rem;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); /* Sama dengan avatar biasa */
 }
 .loadingIndicatorBubble {
   background-color: var(--surface-card);
@@ -327,7 +329,7 @@
 .loadingDots > div {
   width: 8px;
   height: 8px;
-  background-color: var(--text-muted);
+  background-color: var(--text-muted, #6b7280);
   border-radius: 50%;
   animation: bounceDots 1.4s infinite ease-in-out both;
 }
@@ -340,9 +342,9 @@
 
 .errorMessageContainer {
   padding: 0.75rem 1rem;
-  background-color: var(--danger-bg);
-  color: var(--danger-text);
-  border-top: 1px solid var(--danger-border);
+  background-color: var(--danger-bg, #fee2e2);
+  color: var(--danger-text, #b91c1c);
+  border-top: 1px solid var(--danger-border, #fecaca);
   font-size: 0.875rem;
   text-align: center;
   width: 100%;
